@@ -64,7 +64,7 @@ button.mb:active,#coop button:active{background:rgba(80,100,70,.8)}
   <button class="mb" id="bCoop">CO-OP</button>
   <div id="coop">
     <div><button id="bBtHost">BLUETOOTH: HOST</button><button id="bBtJoin">BLUETOOTH: JOIN</button></div>
-    <div id="btBox" style="display:none"><small>Paired devices (pair them first in Android Settings):</small><div id="btList"></div></div>
+    <div id="btBox" style="display:none"><small>Phones nearby (tap one to connect):</small><div id="btList"></div></div>
     <small style="text-align:center;margin-top:14px">— or over Wi-Fi / internet (copy-paste codes) —</small>
     <div><button id="bHost">I'M HOSTING</button><button id="bJoin">I'M JOINING</button></div>
     <div id="hostBox" style="display:none">
@@ -458,34 +458,53 @@ async function guestJoin(){
   }catch(e){setStat('Bad host code.')}
 }
 
-/* --- Bluetooth Classic transport (needs the native plugin inside the APK) --- */
-const BT=()=>window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.BluetoothCommunication;
-let btBuf='';
-function btSend(o){try{BT().sendData({data:JSON.stringify(o)+'\n'}).catch(()=>{})}catch(e){}}
+/* --- Bluetooth Classic transport (custom native plugin "Bt", built in by the workflow) --- */
+let btP=null,btBuf='',btHooked=false,btSeen={};
+const BT=()=>{if(btP)return btP;const C=window.Capacitor;if(!C)return null;btP=(C.Plugins&&C.Plugins.Bt)||(C.registerPlugin?C.registerPlugin('Bt'):null);return btP};
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+function btSend(o){try{BT().send({data:JSON.stringify(o)+'\n'}).catch(()=>{})}catch(e){}}
 function btOnData(ev){ // RFCOMM is a byte stream: messages can split or merge, so frame by newline
-  btBuf+=typeof ev==='string'?ev:((ev&&ev.data)||'');
+  btBuf+=(ev&&ev.data)||'';
   let i;while((i=btBuf.indexOf('\n'))>=0){const line=btBuf.slice(0,i);btBuf=btBuf.slice(i+1);if(line.trim()){try{onNet(JSON.parse(line))}catch(e){}}}
 }
+function btAddDevice(d){
+  if(!d||!d.address||btSeen[d.address])return;btSeen[d.address]=1;
+  $('btBox').style.display='block';
+  const b=document.createElement('button');
+  b.textContent=(d.name||'Unknown phone')+(d.paired?' (paired)':'')+'  …'+d.address.slice(-5);
+  b.onclick=async()=>{
+    setStat('Connecting to '+(d.name||d.address)+'...');
+    try{await BT().connect({address:d.address});setStat('Connected. Waiting for the host...')}
+    catch(e){setStat('Connection failed. Is that phone on the Host screen?')}
+  };
+  $('btList').appendChild(b);
+}
+function btHook(){
+  if(btHooked)return;btHooked=true;const p=BT();
+  p.addListener('data',btOnData);
+  p.addListener('found',btAddDevice);
+  p.addListener('connected',()=>{setStat('Connected!');if(role==='host'){const seed=(Math.random()*1e9)|0;send({t:'start',seed});startGame(seed,'host')}});
+  p.addListener('closed',()=>{toast('Partner disconnected.',3000);remote.active=false;if(remote.mesh)remote.mesh.visible=false;if(role==='guest'&&state==='play')showEnd(false,'Lost connection to the host.')});
+  p.addListener('discoveryDone',()=>setStat(Object.keys(btSeen).length?'Tap a phone to connect.':'No phones found. Ask the host to tap "Bluetooth: Host", then tap JOIN again.'));
+}
 async function btInit(){
-  const bt=BT();if(!bt){setStat('Bluetooth only works in the Android app (APK).');return false}
+  const p=BT();if(!p){setStat('Bluetooth only works in the Android app (APK).');return false}
   initAudio();
-  try{await bt.initialize();await bt.enableBluetooth();bt.addListener('dataReceived',btOnData);return true}
-  catch(e){setStat('Bluetooth error: '+(e.message||e));return false}
+  try{
+    btHook();await p.requestAccess();
+    for(let i=0;i<30;i++){if((await p.isEnabled()).enabled)return true;await sleep(500)}
+    setStat('Turn Bluetooth on, then try again.');return false;
+  }catch(e){setStat('Bluetooth error: '+(e.message||e));return false}
 }
 async function btHost(){
   role='host';net.bt=true;if(!await btInit())return;
-  try{await BT().startServer();setStat('Waiting for your friend to join over Bluetooth...')}catch(e){setStat('Could not start the Bluetooth server.')}
+  try{await BT().host();setStat('Visible and waiting. Your friend taps "Bluetooth: Join".')}
+  catch(e){setStat('Could not start hosting: '+(e.message||e))}
 }
 async function btJoin(){
   role='guest';net.bt=true;if(!await btInit())return;
-  let r;try{r=await BT().scanDevices()}catch(e){setStat('Could not list devices.');return}
-  const list=$('btList'),devs=r.devices||[];$('btBox').style.display='block';list.innerHTML='';
-  if(!devs.length)setStat('No paired devices. Pair with the host in Android Settings first.');
-  devs.forEach(d=>{
-    const b=document.createElement('button');b.textContent=(d.name||'Unknown')+' ('+d.address+')';
-    b.onclick=async()=>{setStat('Connecting...');try{await BT().connect({address:d.address});setStat('Connected. Waiting for the host...');send({t:'hello'})}catch(e){setStat('Connection failed.')}};
-    list.appendChild(b);
-  });
+  btSeen={};$('btList').innerHTML='';$('btBox').style.display='block';setStat('Searching for nearby phones...');
+  try{await BT().discover()}catch(e){setStat('Search failed: '+(e.message||e))}
 }
 
 /* --- shared message handling --- */
