@@ -87,7 +87,7 @@ button.mb:active,#coop button:active{background:rgba(80,100,70,.8)}
     </div>
     <div id="netStat"></div>
   </div>
-  <p class="tip">Left thumb: move · Right thumb: look · Hold SPRINT to run (drains stamina, and it's loud) · LIGHT toggles the flashlight · USE interacts and hides you in lockers.<br>The radar (top-right) shows hunting monsters, even behind you. Find the cyan Fuse Scanner to reveal the fuses.<br>Desktop: WASD, drag to look, Shift sprint, F light, E use.</p>
+  <p class="tip">Left thumb: move · Right thumb: look · Hold SPRINT to run (drains stamina, and it's loud) · LIGHT toggles the flashlight · USE interacts and hides you in lockers.<br>The radar (top-right) shows hunting monsters, even behind you, and your friend in co-op. Find the cyan Fuse Scanner to reveal the fuses.<br>Desktop: WASD, drag to look, Shift sprint, F light, E use, Q scan.</p>
 </div>
 
 <div id="end">
@@ -107,7 +107,7 @@ const NEED=5, N_BATT=8, N_LOCK=14, N_MON=2;
 const WALK=7;                    // base player speed
 const SPRINT=WALK*2;             // sprint = 2x walk (14)
 const MONSTER_SPEED=WALK*1.5;    // chasing monster = 1.5x walk (10.5)
-const PATROL_SPEED=WALK*.6;
+const PATROL_SPEED=WALK*.85;     // monsters roaming (5.95)
 const HEAR_WALK=9, HEAR_SPRINT=20, SIGHT=22, SIGHT_DARK=6, CATCH=1.3;
 const SCAN_TIME=15;
 const D4=[[1,0],[-1,0],[0,1],[0,-1]];
@@ -156,14 +156,18 @@ function bfsDist(sx,sz){
   for(let i=0;i<q.length;i++){const [x,z]=q[i];for(const [dx,dz] of D4){const a=x+dx,b=z+dz;if(grid[b]&&grid[b][a]===0&&d[b][a]<0){d[b][a]=d[z][x]+1;q.push([a,b])}}}
   return d;
 }
-function bfsPath(sx,sz,tx,tz){
+/* Path from tile (sx,sz) to tile (tx,tz). The list does NOT include the start tile (so a walker
+   never turns back to its own tile centre). If (fx,fz) is given, the last waypoint is that exact spot. */
+function bfsPath(sx,sz,tx,tz,fx,fz){
   const prev=Array.from({length:GW},()=>Array(GW).fill(null)); prev[sz][sx]=[sx,sz]; const q=[[sx,sz]];
   for(let i=0;i<q.length;i++){const [x,z]=q[i];if(x===tx&&z===tz)break;
     for(const [dx,dz] of D4){const a=x+dx,b=z+dz;if(grid[b]&&grid[b][a]===0&&!prev[b][a]){prev[b][a]=[x,z];q.push([a,b])}}}
   if(!prev[tz]||!prev[tz][tx])return [];
   const p=[];let c=[tx,tz];
   while(!(c[0]===sx&&c[1]===sz)){p.push({x:tc(c[0]),z:tc(c[1])});c=prev[c[1]][c[0]]}
-  p.push({x:tc(sx),z:tc(sz)}); p.reverse(); return p;
+  p.reverse();
+  if(fx!==undefined){if(p.length)p[p.length-1]={x:fx,z:fz};else p.push({x:fx,z:fz})}
+  return p;
 }
 const wallAt=(x,z)=>{const i=Math.floor(x/T),j=Math.floor(z/T);return !grid[j]||grid[j][i]!==0};
 const blocked=(x,z,r)=>wallAt(x-r,z-r)||wallAt(x+r,z-r)||wallAt(x-r,z+r)||wallAt(x+r,z+r)||lockers.some(l=>Math.abs(x-l.x)<.55+r&&Math.abs(z-l.z)<.55+r);
@@ -326,7 +330,7 @@ function buildWorld(){
   ring.rotation.x=-Math.PI/2;ring.position.set(exitP.x,.03,exitP.z);scene.add(ring);exitP.ring=ring;
   // monsters
   L.mc.forEach((c,i)=>{
-    const mo={id:i,x:tc(c[0]),z:tc(c[1]),ry:0,tx:0,tz:0,tr:0,mode:'patrol',path:[],repath:0,hunt:0,lk:null,d:99,px:0,pz:0,sa:0,grace:i?16:8,mesh:mkMonster(i)};
+    const mo={id:i,x:tc(c[0]),z:tc(c[1]),ry:0,tx:0,tz:0,tr:0,mode:'patrol',path:[],repath:0,hunt:0,lk:null,arrived:false,d:99,px:0,pz:0,sa:0,grace:i?16:8,mesh:mkMonster(i)};
     mo.tx=mo.px=mo.x;mo.tz=mo.pz=mo.z;scene.add(mo.mesh);mons.push(mo);
   });
   remote.mesh=mkRemote();scene.add(remote.mesh);
@@ -402,17 +406,26 @@ function drawMap(){
   const pt=(wx,wz)=>{const dx=wx-me.x,dz=wz-me.z;let sx=(dx*cs-dz*sn)*s,sy=(dx*sn+dz*cs)*s,l=Math.hypot(sx,sy),c=false;
     if(l>R-6){sx*=(R-6)/l;sy*=(R-6)/l;c=true}return [C+sx,C+sy,c]};
   const dot=(p,col,r)=>{mx.fillStyle=col;mx.beginPath();mx.arc(p[0],p[1],p[2]?r*.75:r,0,6.2832);mx.fill()};
+  const arrow=(p,ax,ay,col,r)=>{mx.save();mx.translate(p[0],p[1]);mx.rotate(Math.atan2(ay,ax));mx.fillStyle=col;mx.beginPath();
+    mx.moveTo(r*1.5,0);mx.lineTo(-r,r*.95);mx.lineTo(-r*.45,0);mx.lineTo(-r,-r*.95);mx.closePath();mx.fill();mx.restore()};
   if(fuseCount>=NEED&&exitP){const p=pt(exitP.x,exitP.z);mx.fillStyle='#5dff8a';mx.beginPath();mx.moveTo(p[0],p[1]-5);mx.lineTo(p[0]+4.5,p[1]);mx.lineTo(p[0],p[1]+5);mx.lineTo(p[0]-4.5,p[1]);mx.closePath();mx.fill()}
   if(scanLeft>0){
     for(const f of fuses){if(f.got)continue;const p=pt(f.x,f.z);dot(p,'#ffa030',4);
       mx.strokeStyle='#ffa030';mx.lineWidth=1.2;mx.beginPath();mx.arc(p[0],p[1],5+((time*2)%1)*5,0,6.2832);mx.stroke()}
   }
-  if(remote.active&&!remote.hid)dot(pt(remote.x,remote.z),'#6fb7ff',3.6);
   for(const mo of mons){
     if(!(mo.mode==='hunt'||mo.d<22))continue;       // hunting monsters are always shown (pinned to the rim if far)
     const p=pt(mo.x,mo.z),col=mo.id?'#c65cff':'#ff3b3b';
     if(mo.mode==='hunt'){mx.strokeStyle=col;mx.lineWidth=1.5;mx.beginPath();mx.arc(p[0],p[1],5+((time*3)%1)*6,0,6.2832);mx.stroke()}
     dot(p,col,4.4);
+  }
+  // your friend (co-op): bright blue arrow showing where they face, white ring + "F"; stays on the rim when far away
+  if(remote.active){
+    const p=pt(remote.x,remote.z),fx=-Math.sin(remote.yaw),fz=-Math.cos(remote.yaw),ax=fx*cs-fz*sn,ay=fx*sn+fz*cs;
+    mx.fillStyle='rgba(69,208,255,.28)';mx.beginPath();mx.arc(p[0],p[1],9,0,6.2832);mx.fill();
+    if(p[2]||remote.hid)dot(p,'#45d0ff',5);else arrow(p,ax,ay,'#45d0ff',5.5);
+    mx.strokeStyle='#ffffff';mx.lineWidth=1.3;mx.beginPath();mx.arc(p[0],p[1],8,0,6.2832);mx.stroke();
+    mx.fillStyle='#ffffff';mx.font='bold 10px monospace';mx.textAlign='center';mx.fillText(remote.hid?'F (hiding)':'F',p[0],p[1]-11);
   }
   mx.fillStyle='#e8f0dc';mx.beginPath();mx.moveTo(C,C-6.5);mx.lineTo(C+4.8,C+5);mx.lineTo(C,C+2.5);mx.lineTo(C-4.8,C+5);mx.closePath();mx.fill();
   mx.strokeStyle='rgba(200,210,190,.55)';mx.lineWidth=2;mx.beginPath();mx.arc(C,C,R,0,6.2832);mx.stroke();
@@ -511,6 +524,10 @@ function pickups(){
 
 /* ---------- monsters ---------- */
 let layoutOpen=[];
+function searchCell(lt){ // a random open tile near where the monster last sensed you
+  const c=layoutOpen.filter(o=>Math.abs(o[0]-lt[0])+Math.abs(o[1]-lt[1])<=7);
+  return c.length?c[(Math.random()*c.length)|0]:lt;
+}
 function monsterAI(dt){
   if(state!=='play')return;
   const ps=[{x:me.x,z:me.z,fl:flOn,noise:noiseR,hid:me.hid>=0,ref:me}];
@@ -523,17 +540,27 @@ function monsterAI(dt){
     const seen=!!best&&bd<SIGHT&&los(mo.x,mo.z,best.x,best.z)&&(best.fl||bd<SIGHT_DARK);
     const heard=!!best&&bd<best.noise;
     // a monster that saw you duck into a locker goes straight to it
-    for(const p of ps){if(p.hid&&p.ref.saw&&p.ref.sawBy===k){mo.mode='hunt';mo.hunt=Math.max(mo.hunt,5);mo.lk={x:p.x,z:p.z}}}
-    if(mo.grace<=0&&(seen||heard)){if(mo.mode!=='hunt')sfx.stinger(mo.d);mo.mode='hunt';mo.hunt=7;mo.lk={x:best.x,z:best.z}}
-    else if(mo.mode==='hunt'){mo.hunt-=dt;if(mo.hunt<=0){mo.mode='patrol';mo.path=[]}}
+    for(const p of ps){if(p.hid&&p.ref.saw&&p.ref.sawBy===k){mo.mode='hunt';mo.hunt=Math.max(mo.hunt,5);mo.lk={x:p.x,z:p.z};mo.arrived=false}}
+    if(mo.grace<=0&&(seen||heard)){if(mo.mode!=='hunt')sfx.stinger(mo.d);mo.mode='hunt';mo.hunt=7;mo.lk={x:best.x,z:best.z};mo.arrived=false}
+    else if(mo.mode==='hunt'){mo.hunt-=dt;if(mo.hunt<=0){mo.mode='patrol';mo.path=[];mo.arrived=false}}
     mo.repath-=dt;
     const spd=mo.mode==='hunt'?MONSTER_SPEED:PATROL_SPEED;
+    const mt=[Math.floor(mo.x/T),Math.floor(mo.z/T)];
     if(mo.mode==='hunt'){
-      if(seen&&bd<9)mo.path=[{x:best.x,z:best.z}];
-      else if(mo.repath<=0){mo.path=bfsPath(Math.floor(mo.x/T),Math.floor(mo.z/T),Math.floor(mo.lk.x/T),Math.floor(mo.lk.z/T));mo.repath=.3}
-    }else if(!mo.path.length){
+      if(seen&&bd<9){mo.path=[{x:best.x,z:best.z}];mo.arrived=false}          // close and in sight: run straight at you
+      else if(mo.repath<=0){
+        mo.repath=.3;
+        const lt=[Math.floor(mo.lk.x/T),Math.floor(mo.lk.z/T)];
+        if(mo.arrived){                                                         // reached the last known spot: search the area
+          if(!mo.path.length){const sc=searchCell(lt);mo.path=bfsPath(mt[0],mt[1],sc[0],sc[1])}
+        }else{
+          mo.path=bfsPath(mt[0],mt[1],lt[0],lt[1],mo.lk.x,mo.lk.z);
+          if(Math.hypot(mo.lk.x-mo.x,mo.lk.z-mo.z)<1.5)mo.arrived=true;
+        }
+      }
+    }else if(!mo.path.length){                                                  // roaming
       const c=layoutOpen[(Math.random()*layoutOpen.length)|0];
-      mo.path=bfsPath(Math.floor(mo.x/T),Math.floor(mo.z/T),c[0],c[1]);
+      mo.path=bfsPath(mt[0],mt[1],c[0],c[1]);
     }
     if(mo.path.length){
       const w=mo.path[0],dx=w.x-mo.x,dz=w.z-mo.z,d=Math.hypot(dx,dz),st=spd*dt;
@@ -661,7 +688,7 @@ async function btJoin(){
 function setRemote(p){
   if(!remote.mesh)return;const now=performance.now()/1000;
   const prev=remote.hid||0,hid=p[4]||0;
-  if(!remote.active){remote.active=true;remote.x=p[0];remote.z=p[1];remote.mesh.visible=true}
+  if(!remote.active){remote.active=true;remote.x=remote.tx=p[0];remote.z=remote.tz=p[1];remote.yaw=p[2];remote.mesh.visible=true}
   else if(remote.lastT){const dt=now-remote.lastT;if(dt>0)remote.v=Math.hypot(p[0]-remote.tx,p[1]-remote.tz)/dt}
   if(role==='host'&&!prev&&hid){remote.sawBy=sawBy(p[0],p[1]);remote.saw=remote.sawBy>=0;remote.risk=0}
   if(!hid){remote.saw=false;remote.sawBy=-1;remote.risk=0}
@@ -770,7 +797,7 @@ function startGame(seed,r){
   role=r;initAudio();genMaze(seed);buildWorld();
   layoutOpen=[];for(let z=1;z<GW-1;z++)for(let x=1;x<GW-1;x++)if(grid[z][x]===0)layoutOpen.push([x,z]);
   $('menu').style.display='none';$('hud').style.display='block';
-  state='play';updateObj();toast(r==='solo'?'Two of them are out there. Watch the radar.':'Co-op: stay close. Two of them are out there.',3500);
+  state='play';updateObj();toast(r==='solo'?'Two of them are out there. Watch the radar.':'Co-op: your friend is the blue "F" on the radar. Two of them are out there.',3800);
   clock=new THREE.Clock();loop();
 }
 addEventListener('resize',()=>{if(!renderer)return;renderer.setSize(innerWidth,innerHeight);camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix()});
