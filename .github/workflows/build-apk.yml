@@ -11,9 +11,15 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Check repo files
+        run: |
+          ls -la
+          test -f index.html || { echo "::error::index.html must be in the repo root (same level as the .github folder)"; exit 1; }
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -25,6 +31,9 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
 
       - name: Prepare web assets (bundle Three.js so the APK works offline)
         run: |
@@ -46,29 +55,37 @@ jobs:
           npx cap add android
           npx cap sync android
 
-      - name: Patch Android (landscape + fullscreen)
+      - name: Patch manifest and theme
         run: |
-          sed -i 's#<activity#<activity android:screenOrientation="sensorLandscape"#' android/app/src/main/AndroidManifest.xml
-          sed -i 's#<style name="AppTheme.NoActionBar"[^>]*>#&\n        <item name="android:windowFullscreen">true</item>#' android/app/src/main/res/values/styles.xml
+          python3 - <<'PY'
+          import re
+          mf = 'android/app/src/main/AndroidManifest.xml'
+          s = open(mf, encoding='utf-8').read()
+          s = s.replace('<activity', '<activity android:screenOrientation="sensorLandscape"', 1)
+          perms = [
+              '<uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />',
+              '<uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />',
+              '<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" android:maxSdkVersion="30" />',
+              '<uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" />',
+              '<uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />',
+              '<uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />',
+              '<uses-feature android:name="android.hardware.bluetooth" android:required="false" />',
+          ]
+          s = s.replace('<application', '\n    '.join(perms) + '\n\n    <application', 1)
+          open(mf, 'w', encoding='utf-8').write(s)
 
-      - name: Add Bluetooth permissions
-        run: |
-          MF=android/app/src/main/AndroidManifest.xml
-          for P in \
-            'android.permission.BLUETOOTH" android:maxSdkVersion="30' \
-            'android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30' \
-            'android.permission.ACCESS_FINE_LOCATION" android:maxSdkVersion="30' \
-            'android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation' \
-            'android.permission.BLUETOOTH_CONNECT' \
-            'android.permission.BLUETOOTH_ADVERTISE'; do
-            sed -i "/<application/i\\    <uses-permission android:name=\"$P\" />" "$MF"
-          done
-          sed -i '/<application/i\    <uses-feature android:name="android.hardware.bluetooth" android:required="false" />' "$MF"
+          st = 'android/app/src/main/res/values/styles.xml'
+          t = open(st, encoding='utf-8').read()
+          t = re.sub(r'(<style name="AppTheme\.NoActionBar"[^>]*>)',
+                     r'\1\n        <item name="android:windowFullscreen">true</item>', t, count=1)
+          open(st, 'w', encoding='utf-8').write(t)
+          PY
+          cat android/app/src/main/AndroidManifest.xml
 
-      - name: Add native Bluetooth plugin (live discovery + host/join)
+      - name: Add native Bluetooth plugin
         run: |
           DIR=android/app/src/main/java/com/hollowhalls/game
-          mkdir -p "$DIR"
+          ls "$DIR"
           cat > "$DIR/MainActivity.java" <<'EOF'
           package com.hollowhalls.game;
 
@@ -301,20 +318,48 @@ jobs:
           }
           EOF
 
-      - name: Build debug APK
+      - name: Build APK (with Bluetooth)
+        id: build_bt
+        continue-on-error: true
         working-directory: android
         run: |
+          set -o pipefail
           chmod +x ./gradlew
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tee ../build-bt.log
+
+      - name: Fallback build (without Bluetooth) if the Bluetooth build failed
+        if: steps.build_bt.outcome == 'failure'
+        working-directory: android
+        run: |
+          echo "::warning::The Bluetooth build failed, so this APK is built WITHOUT Bluetooth. Download the build-log artifact to see why."
+          rm -f app/src/main/java/com/hollowhalls/game/BtPlugin.java
+          cat > app/src/main/java/com/hollowhalls/game/MainActivity.java <<'EOF'
+          package com.hollowhalls.game;
+
+          import com.getcapacitor.BridgeActivity;
+
+          public class MainActivity extends BridgeActivity {}
+          EOF
+          ./gradlew clean assembleDebug --no-daemon --stacktrace
 
       - name: Rename APK
-        run: cp android/app/build/outputs/apk/debug/app-debug.apk HollowHalls.apk
+        run: |
+          ls -la android/app/build/outputs/apk/debug/
+          cp android/app/build/outputs/apk/debug/app-debug.apk HollowHalls.apk
 
-      - name: Upload APK artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: HollowHalls-apk
           path: HollowHalls.apk
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build-bt.log
+          if-no-files-found: ignore
 
       - name: Publish GitHub Release
         if: github.ref == 'refs/heads/main'
@@ -322,4 +367,5 @@ jobs:
         with:
           tag_name: build-${{ github.run_number }}
           name: Hollow Halls build ${{ github.run_number }}
+          body: "Bluetooth build: ${{ steps.build_bt.outcome }}"
           files: HollowHalls.apk
