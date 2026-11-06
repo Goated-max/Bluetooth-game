@@ -79,7 +79,7 @@ jobs:
           PY
           cat android/app/src/main/AndroidManifest.xml
 
-      - name: Add native Bluetooth plugin
+      - name: Add native Bluetooth plugin (multi-player)
         run: |
           DIR=android/app/src/main/java/com/hollowhalls/game
           ls "$DIR"
@@ -102,6 +102,7 @@ jobs:
 
           import android.annotation.SuppressLint;
           import android.bluetooth.BluetoothAdapter;
+          import android.bluetooth.BluetoothClass;
           import android.bluetooth.BluetoothDevice;
           import android.bluetooth.BluetoothServerSocket;
           import android.bluetooth.BluetoothSocket;
@@ -122,7 +123,9 @@ jobs:
           import java.io.InputStream;
           import java.io.OutputStream;
           import java.nio.charset.StandardCharsets;
+          import java.util.Map;
           import java.util.UUID;
+          import java.util.concurrent.ConcurrentHashMap;
           import java.util.concurrent.ExecutorService;
           import java.util.concurrent.Executors;
 
@@ -137,11 +140,18 @@ jobs:
           })
           public class BtPlugin extends Plugin {
               private static final UUID APP_UUID = UUID.fromString("6f3c5a1e-8b24-4d7a-9c10-2e5f0a1b7d93");
+
+              private static class Conn {
+                  int id;
+                  BluetoothSocket sock;
+                  OutputStream out;
+              }
+
               private BluetoothAdapter adapter;
               private BluetoothServerSocket server;
-              private BluetoothSocket sock;
-              private OutputStream out;
               private BroadcastReceiver receiver;
+              private final Map<Integer, Conn> conns = new ConcurrentHashMap<>();
+              private int nextId = 1;
               private final ExecutorService writer = Executors.newSingleThreadExecutor();
 
               private String alias() { return Build.VERSION.SDK_INT >= 31 ? "bt12" : "loc"; }
@@ -175,22 +185,26 @@ jobs:
                   call.resolve(o);
               }
 
+              // Host: accept up to "max" guests on one server socket (star topology)
               @PluginMethod
               public void host(PluginCall call) {
+                  final int max = call.getInt("max", 3);
                   try {
                       if (adapter == null) adapter = BluetoothAdapter.getDefaultAdapter();
-                      shutdown();
-                      server = adapter.listenUsingInsecureRfcommWithServiceRecord("HollowHalls", APP_UUID);
+                      closeServer();
+                      final BluetoothServerSocket srv = adapter.listenUsingInsecureRfcommWithServiceRecord("HollowHalls", APP_UUID);
+                      server = srv;
                       Intent d = new Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE);
                       d.putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 300);
                       getActivity().startActivity(d);
-                      final BluetoothServerSocket s = server;
                       new Thread(() -> {
                           try {
-                              BluetoothSocket c = s.accept();
-                              try { s.close(); } catch (IOException ignored) {}
-                              attach(c);
+                              while (conns.size() < max) {
+                                  BluetoothSocket c = srv.accept();
+                                  attach(c, nextId++);
+                              }
                           } catch (IOException ignored) {}
+                          try { srv.close(); } catch (IOException ignored) {}
                       }).start();
                       call.resolve();
                   } catch (Exception e) {
@@ -199,18 +213,23 @@ jobs:
               }
 
               @PluginMethod
+              public void stopHost(PluginCall call) { closeServer(); call.resolve(); }
+
+              @PluginMethod
               public void discover(PluginCall call) {
                   try {
                       if (adapter == null) adapter = BluetoothAdapter.getDefaultAdapter();
                       stopReceiver();
-                      for (BluetoothDevice d : adapter.getBondedDevices()) emitFound(d, true);
+                      for (BluetoothDevice d : adapter.getBondedDevices()) emitFound(d, true, null, null);
                       receiver = new BroadcastReceiver() {
                           @Override
                           public void onReceive(Context c, Intent i) {
                               String a = i.getAction();
                               if (BluetoothDevice.ACTION_FOUND.equals(a)) {
                                   BluetoothDevice d = i.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
-                                  if (d != null) emitFound(d, false);
+                                  String nm = i.getStringExtra(BluetoothDevice.EXTRA_NAME);
+                                  BluetoothClass bc = i.getParcelableExtra(BluetoothDevice.EXTRA_CLASS);
+                                  if (d != null) emitFound(d, false, nm, bc);
                               } else if (BluetoothAdapter.ACTION_DISCOVERY_FINISHED.equals(a)) {
                                   notifyListeners("discoveryDone", new JSObject());
                               }
@@ -228,11 +247,14 @@ jobs:
                   }
               }
 
-              private void emitFound(BluetoothDevice d, boolean paired) {
+              private void emitFound(BluetoothDevice d, boolean paired, String nameExtra, BluetoothClass cls) {
+                  String n = nameExtra != null ? nameExtra : d.getName();
+                  BluetoothClass bc = cls != null ? cls : d.getBluetoothClass();
                   JSObject o = new JSObject();
-                  o.put("name", d.getName() == null ? "" : d.getName());
+                  o.put("name", n == null ? "" : n);
                   o.put("address", d.getAddress());
                   o.put("paired", paired);
+                  o.put("major", bc == null ? -1 : bc.getMajorDeviceClass());
                   notifyListeners("found", o);
               }
 
@@ -247,7 +269,7 @@ jobs:
                           BluetoothDevice dev = adapter.getRemoteDevice(addr);
                           BluetoothSocket s = dev.createInsecureRfcommSocketToServiceRecord(APP_UUID);
                           s.connect();
-                          attach(s);
+                          attach(s, nextId++);
                           call.resolve();
                       } catch (Exception e) {
                           call.reject("connect failed: " + e.getMessage());
@@ -255,39 +277,60 @@ jobs:
                   }).start();
               }
 
-              private void attach(BluetoothSocket s) throws IOException {
-                  sock = s;
-                  out = s.getOutputStream();
+              private void attach(final BluetoothSocket s, final int id) throws IOException {
+                  final Conn c = new Conn();
+                  c.id = id;
+                  c.sock = s;
+                  c.out = s.getOutputStream();
                   final InputStream in = s.getInputStream();
-                  notifyListeners("connected", new JSObject());
+                  conns.put(id, c);
+                  JSObject o = new JSObject();
+                  o.put("id", id);
+                  notifyListeners("connected", o);
                   new Thread(() -> {
                       byte[] buf = new byte[1024];
                       try {
                           int n;
                           while ((n = in.read(buf)) > 0) {
-                              JSObject o = new JSObject();
-                              o.put("data", new String(buf, 0, n, StandardCharsets.UTF_8));
-                              notifyListeners("data", o);
+                              JSObject d = new JSObject();
+                              d.put("id", id);
+                              d.put("data", new String(buf, 0, n, StandardCharsets.UTF_8));
+                              notifyListeners("data", d);
                           }
                       } catch (IOException ignored) {}
-                      notifyListeners("closed", new JSObject());
+                      conns.remove(id);
+                      try { s.close(); } catch (IOException ignored) {}
+                      JSObject cl = new JSObject();
+                      cl.put("id", id);
+                      notifyListeners("closed", cl);
                   }).start();
               }
 
+              // id < 0 (or missing) = broadcast to every connection
               @PluginMethod
               public void send(PluginCall call) {
                   final String data = call.getString("data");
-                  final OutputStream o = out;
-                  if (o == null || data == null) { call.reject("not connected"); return; }
+                  final int id = call.getInt("id", -1);
+                  if (data == null || conns.isEmpty()) { call.reject("not connected"); return; }
+                  final byte[] bytes = data.getBytes(StandardCharsets.UTF_8);
                   writer.execute(() -> {
-                      try {
-                          o.write(data.getBytes(StandardCharsets.UTF_8));
-                          o.flush();
-                          call.resolve();
-                      } catch (IOException e) {
-                          call.reject("send failed");
+                      if (id < 0) {
+                          for (Conn c : conns.values()) write(c, bytes);
+                      } else {
+                          Conn c = conns.get(id);
+                          if (c != null) write(c, bytes);
                       }
+                      call.resolve();
                   });
+              }
+
+              private void write(Conn c, byte[] b) {
+                  try {
+                      c.out.write(b);
+                      c.out.flush();
+                  } catch (IOException e) {
+                      try { c.sock.close(); } catch (IOException ignored) {}
+                  }
               }
 
               @PluginMethod
@@ -295,6 +338,11 @@ jobs:
 
               @Override
               protected void handleOnDestroy() { shutdown(); }
+
+              private void closeServer() {
+                  try { if (server != null) server.close(); } catch (IOException ignored) {}
+                  server = null;
+              }
 
               private void stopReceiver() {
                   if (receiver != null) {
@@ -304,11 +352,11 @@ jobs:
               }
 
               private void shutdown() {
-                  try { if (server != null) server.close(); } catch (IOException ignored) {}
-                  server = null;
-                  try { if (sock != null) sock.close(); } catch (IOException ignored) {}
-                  sock = null;
-                  out = null;
+                  closeServer();
+                  for (Conn c : conns.values()) {
+                      try { c.sock.close(); } catch (IOException ignored) {}
+                  }
+                  conns.clear();
                   stopReceiver();
                   try { if (adapter != null && adapter.isDiscovering()) adapter.cancelDiscovery(); } catch (Exception ignored) {}
               }
