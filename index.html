@@ -13,8 +13,8 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;font-family:"Cour
 #slats{position:fixed;inset:0;display:none;pointer-events:none;background:repeating-linear-gradient(180deg,#000 0 14px,rgba(0,0,0,0) 14px 24px);box-shadow:inset 0 0 0 7vmin #000}
 #hud{position:fixed;inset:0;display:none;pointer-events:none}
 #touch{position:absolute;inset:0;pointer-events:auto;z-index:1}
-#obj{position:absolute;top:calc(10px + env(safe-area-inset-top));left:calc(14px + env(safe-area-inset-left));font-size:14px;text-shadow:0 0 6px #000;z-index:2}
-.bars{position:absolute;top:calc(36px + env(safe-area-inset-top));left:calc(14px + env(safe-area-inset-left));z-index:2}
+#obj{position:absolute;top:calc(10px + env(safe-area-inset-top));left:calc(14px + env(safe-area-inset-left));font-size:13px;line-height:1.35;white-space:pre;max-width:60vw;text-shadow:0 0 6px #000;z-index:2}
+.bars{position:absolute;top:calc(58px + env(safe-area-inset-top));left:calc(14px + env(safe-area-inset-left));z-index:2}
 .bar{width:120px;height:7px;border:1px solid rgba(200,210,190,.4);margin-bottom:5px;background:rgba(0,0,0,.5)}
 .bar i{display:block;height:100%;width:100%}
 .lbl{font-size:10px;opacity:.6;margin-bottom:1px}
@@ -33,7 +33,7 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;font-family:"Cour
 #btnLight.on{border-color:#cfc27a;color:#cfc27a}
 #btnScan{display:none;right:calc(5vmin + 22vmin + env(safe-area-inset-right));bottom:calc(8vmin + 19vmin + env(safe-area-inset-bottom));width:15vmin;height:15vmin;max-width:80px;max-height:80px;font-size:10px;border-color:#40e0ff;color:#40e0ff}
 #btnScan.act{box-shadow:0 0 16px rgba(64,224,255,.6)}
-#btnMute{left:calc(14px + env(safe-area-inset-left));top:calc(104px + env(safe-area-inset-top));width:34px;height:34px;font-size:16px}
+#btnMute{left:calc(14px + env(safe-area-inset-left));top:calc(126px + env(safe-area-inset-top));width:34px;height:34px;font-size:16px}
 #menu,#end{position:fixed;inset:0;z-index:10;background:radial-gradient(ellipse at center,#0b0f0b 0%,#000 75%);display:flex;padding:12px;overflow-y:auto}
 #menu,#menu *{touch-action:pan-y}
 #menuIn{margin:auto;display:flex;flex-direction:column;align-items:center;text-align:center;width:100%;max-width:460px}
@@ -79,7 +79,7 @@ button.mb.sm{padding:8px 12px;font-size:11px;margin:3px;letter-spacing:.05em}
 
 <div id="menu"><div id="menuIn">
   <h1>HOLLOW HALLS</h1>
-  <p class="sub">The power is out. Five fuses are scattered through the dark, and things are hunting. Restore the fuses, open the gate, and don't let them hear you.</p>
+  <p class="sub">The power is out. Find the fuses, carry each one to its glowing socket, then escape through the gate. Things are hunting, and the more of you there are, the bigger the halls.</p>
   <div><button class="mb" id="bSolo">PLAY SOLO</button><button class="mb" id="bCoop">CO-OP</button></div>
   <div id="coop">
     <div><button id="bBtHost">BLUETOOTH: HOST (2–4 PLAYERS)</button><button id="bBtJoin">BLUETOOTH: JOIN</button></div>
@@ -105,9 +105,9 @@ button.mb.sm{padding:8px 12px;font-size:11px;margin:3px;letter-spacing:.05em}
     <div id="netStat"></div>
   </div>
   <div class="set">
-    <button class="mb sm" id="bMusic"></button><button class="mb sm" id="bSfx"></button><button class="mb sm" id="bLighting"></button>
+    <button class="mb sm" id="bMusic"></button><button class="mb sm" id="bSfx"></button>
   </div>
-  <p class="tip">Left thumb: move · Right thumb: look · Hold SPRINT to run (drains stamina, and it's loud) · LIGHT toggles the flashlight · USE interacts and hides you in lockers.<br>The radar (top-right) shows hunting monsters, even behind you, and your friends in co-op. Find the cyan Fuse Scanner to outline every fuse.<br>If the flashlight doesn't work on your tablet, set LIGHTING to COMPATIBLE.<br>Desktop: WASD, drag to look, Shift sprint, F light, E use, Q scan.</p>
+  <p class="tip">Left thumb: move · Right thumb: look · Hold SPRINT to run (drains stamina, and it's loud) · LIGHT toggles the flashlight · USE picks up fuses, places them in the glowing socket, and hides you in lockers.<br>Once every fuse is placed the monsters always know where you are and the exit lights up. Lockers still keep you safe.<br>The radar (top-right) shows hunting monsters, even behind you, and your friends. Find the cyan Fuse Scanner to outline every fuse.<br>Desktop: WASD, drag to look, Shift sprint, F light, E use, Q scan.</p>
 </div></div>
 
 <div id="end">
@@ -122,14 +122,15 @@ button.mb.sm{padding:8px 12px;font-size:11px;margin:3px;letter-spacing:.05em}
 const $=id=>document.getElementById(id);
 
 /* ---------- settings ---------- */
-const SET=Object.assign({music:true,sfx:true,compat:null},(()=>{try{return JSON.parse(localStorage.getItem('hh_set')||'{}')}catch(e){return {}}})());
+const SET=Object.assign({music:true,sfx:true},(()=>{try{return JSON.parse(localStorage.getItem('hh_set')||'{}')}catch(e){return {}}})());
 const saveSet=()=>{try{localStorage.setItem('hh_set',JSON.stringify(SET))}catch(e){}};
-// Compatible lighting = a simple built-in flashlight effect (no Three.js spotlights). Auto-on for Lenovo tablets.
-let COMPAT=SET.compat===null?/Lenovo|TB-|TB3|TB4|Tab ?M\d|YT-/i.test(navigator.userAgent||''):!!SET.compat;
 
+/* ---- lighting: ONE shared flashlight look for every player and every device ---- */
+const FL_POWER=2.1;     // flashlight brightness
+const AMBIENT=.32;      // how much you can see without the flashlight
 /* ---- world tuning ---- */
-const T=4, N=12, GW=N*2+1, WALL_H=3, EYE=1.6;
-const NEED=5, N_BATT=8, N_LOCK=14;
+const T=4, WALL_H=3, EYE=1.6;
+let N=12, GW=25, NEED=5, N_BATT=8, N_LOCK=14;   // these grow with the number of players (see genMaze)
 /* ---- speed tuning ---- */
 const WALK=5;                    // base player speed
 const SPRINT=WALK*2;             // sprint = 2x walk (10)
@@ -146,21 +147,24 @@ const tc=i=>(i+.5)*T;
 const vib=p=>{try{navigator.vibrate&&navigator.vibrate(p)}catch(e){}};
 
 /* ---------- state ---------- */
-let state='menu', role='solo', scene=null, camera=null, renderer=null, flash=null, clock=null, looping=false, time=0, nPlayers=1;
+let state='menu', role='solo', scene=null, camera=null, renderer=null, clock=null, looping=false, time=0, nPlayers=1;
 let grid, rng, exitP, closeness=0, nearD=99, hb=0, ambT=10, growlT=0, breathT=0, dyT=0, killer=0, lastPrompt='', hidYaw=0, hidFl=true, mapTick=0, tension=0;
-let hasScan=false, scanUsed=false, scanLeft=0, frameMat=null, layoutOpen=[];
-const fuses=[], batts=[], lockers=[], mons=[], peers=new Map();
+let hasScan=false, scanUsed=false, scanLeft=0, frameMat=null, skMat=null, exMat=null, layoutOpen=[];
+let endgame=false, carry=-1, lastObj='';
+const fuses=[], sockets=[], batts=[], lockers=[], mons=[], peers=new Map();
+let exitBeam=null, exitRing=null;
 const pu={x:0,z:0,got:false,mesh:null};
 const me={id:0,x:0,z:0,yaw:0,pitch:0,hid:-1,saw:false,sawBy:-1,risk:0};
-let flOn=true, batt=100, stam=100, exhausted=false, fuseCount=0, stepAcc=0, bobT=0, noiseR=0;
+let fuseCount=0, flOn=true, batt=100, stam=100, exhausted=false, stepAcc=0, bobT=0, noiseR=0;
 const net={pc:null,dc:null,t:0,bt:false,n2l:{},l2n:{}};
 const inp={mx:0,mz:0,keys:{},sprint:false};
 const mapC=$('map'), mx=mapC.getContext('2d');
 
 function mulberry(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
 
-/* ---------- maze ---------- */
+/* ---------- maze (grows with the number of players) ---------- */
 function genMaze(seed){
+  N=10+2*nPlayers;GW=N*2+1;NEED=4+nPlayers;N_BATT=6+2*nPlayers;N_LOCK=12+2*nPlayers;
   rng=mulberry(seed);
   grid=Array.from({length:GW},()=>Array(GW).fill(1));
   const st=[[1,1]]; grid[1][1]=0;
@@ -223,12 +227,14 @@ function layout(){
     const ws=wallsOf(c),d=ws[(rng()*ws.length)|0],off=T/2-.6;
     return {x:tc(c[0])+d[0]*off,z:tc(c[1])+d[1]*off,fx:-d[0],fz:-d[1]};
   });
-  const pc=pickCells(open.filter(c=>dd(c)>=8&&dd(c)<=maxD*.7&&c!==ex&&!fc.includes(c)&&!bc.includes(c)&&!lcells.includes(c)),1,0)[0]||bc[0];
-  return {ex,fc,bc,mc,lk,pc};
+  // one socket per fuse (socket i takes fuse i), placed away from the fuses
+  const sc=pickCells(open.filter(c=>dd(c)>=5&&c!==ex&&!fc.includes(c)&&!bc.includes(c)&&!lcells.includes(c)&&fc.every(f=>Math.abs(f[0]-c[0])+Math.abs(f[1]-c[1])>=6)),NEED,8);
+  const pc=pickCells(open.filter(c=>dd(c)>=8&&dd(c)<=maxD*.7&&c!==ex&&!fc.includes(c)&&!bc.includes(c)&&!lcells.includes(c)&&!sc.includes(c)),1,0)[0]||bc[0];
+  return {ex,fc,bc,mc,lk,sc,pc};
 }
 
-/* ---------- materials (standard lighting, or compatible built-in flashlight) ---------- */
-const FLU={uFlI:{value:0},uAmb:{value:.4}};
+/* ---------- materials: a built-in flashlight shader (no Three.js lights -> identical look on every device) ---------- */
+const FLU={uFlI:{value:0},uAmb:{value:AMBIENT}};
 function hookFl(sh){
   sh.uniforms.uFlI=FLU.uFlI;sh.uniforms.uAmb=FLU.uAmb;
   sh.vertexShader=sh.vertexShader
@@ -239,9 +245,8 @@ function hookFl(sh){
     .replace('vec3 outgoingLight = reflectedLight.indirectDiffuse;','vec3 outgoingLight = reflectedLight.indirectDiffuse * flShade();');
 }
 function mkMat(o){
-  const col=o.color!==undefined?o.color:0xffffff;
-  if(COMPAT){const m=new THREE.MeshBasicMaterial({color:col,map:o.map||null});m.onBeforeCompile=hookFl;return m}
-  return new THREE.MeshStandardMaterial({color:col,map:o.map||null,roughness:o.rough!==undefined?o.rough:.9,metalness:o.metal||0});
+  const m=new THREE.MeshBasicMaterial({color:o.color!==undefined?o.color:0xffffff,map:o.map||null});
+  m.onBeforeCompile=hookFl;return m;
 }
 
 /* ---------- textures / models ---------- */
@@ -268,6 +273,12 @@ function decalTex(){
   const gr=g.createRadialGradient(32,32,2,32,32,30);gr.addColorStop(0,'rgba(90,5,5,.85)');gr.addColorStop(.6,'rgba(50,0,0,.45)');gr.addColorStop(1,'rgba(0,0,0,0)');
   g.fillStyle=gr;g.fillRect(0,0,64,64);return new THREE.CanvasTexture(c);
 }
+function glowTex(){
+  const c=document.createElement('canvas');c.width=c.height=64;const g=c.getContext('2d');
+  const gr=g.createRadialGradient(32,32,0,32,32,32);
+  gr.addColorStop(0,'rgba(255,246,210,1)');gr.addColorStop(.25,'rgba(255,232,165,.55)');gr.addColorStop(1,'rgba(255,220,140,0)');
+  g.fillStyle=gr;g.fillRect(0,0,64,64);return new THREE.CanvasTexture(c);
+}
 function ventTex(){
   const c=document.createElement('canvas');c.width=64;c.height=128;const g=c.getContext('2d');
   g.fillStyle='#2b3330';g.fillRect(0,0,64,128);
@@ -291,16 +302,16 @@ function mkFrame(w,h,d,t,mat){ // rectangular wire frame made of 12 thin bars (a
 }
 function mkLocker(vt){
   const g=new THREE.Group();
-  const body=new THREE.Mesh(new THREE.BoxGeometry(1,2.3,.9),mkMat({color:0x2b3330,rough:.7,metal:.4}));body.position.y=1.15;
-  const front=new THREE.Mesh(new THREE.PlaneGeometry(.9,2.15),mkMat({map:vt,rough:.7,metal:.3}));front.position.set(0,1.15,.456);
+  const body=new THREE.Mesh(new THREE.BoxGeometry(1,2.3,.9),mkMat({color:0x2b3330}));body.position.y=1.15;
+  const front=new THREE.Mesh(new THREE.PlaneGeometry(.9,2.15),mkMat({map:vt}));front.position.set(0,1.15,.456);
   const dot=new THREE.Mesh(new THREE.SphereGeometry(.035,6,6),new THREE.MeshBasicMaterial({color:0x33cc77}));dot.position.set(0,2.05,.47);
   g.add(body,front,dot);return g;
 }
 function mkMonster(i){
   const g=new THREE.Group();
-  const dark=mkMat({color:[0x0c0c0e,0x0a0a14,0x0a120c][i%3],rough:1});
+  const dark=mkMat({color:[0x0c0c0e,0x0a0a14,0x0a120c][i%3]});
   const body=new THREE.Mesh(new THREE.CylinderGeometry(.2,.36,1.7,8),dark);body.position.y=1.15;
-  const head=new THREE.Mesh(new THREE.SphereGeometry(.24,10,8),mkMat({color:[0x8d8678,0x7d8696,0x7f9684][i%3],rough:.8}));
+  const head=new THREE.Mesh(new THREE.SphereGeometry(.24,10,8),mkMat({color:[0x8d8678,0x7d8696,0x7f9684][i%3]}));
   head.position.y=2.2;head.scale.set(.8,1.3,.8);
   const eyeM=new THREE.MeshBasicMaterial({color:MCOL[i%3],fog:false});
   const e1=new THREE.Mesh(new THREE.SphereGeometry(.045,6,6),eyeM),e2=e1.clone();
@@ -311,15 +322,15 @@ function mkMonster(i){
   if(i)g.scale.set(1.06,1.06,1.06);
   return g;
 }
-function mkRemote(id){ // another player: body, glowing lamp, faint light cone (no real lights = cheap)
+function mkRemote(id){ // another player: coloured body + a small glowing lamp (when their flashlight is on) + a fuse over the head when carrying one
   const g=new THREE.Group();
-  const body=new THREE.Mesh(new THREE.CylinderGeometry(.25,.28,1.3,8),mkMat({color:PCOL[id%4],rough:.9}));body.position.y=.75;
-  const head=new THREE.Mesh(new THREE.SphereGeometry(.2,10,8),mkMat({color:0xb8a898,rough:.9}));head.position.y=1.6;
+  const body=new THREE.Mesh(new THREE.CylinderGeometry(.25,.28,1.3,8),mkMat({color:PCOL[id%4]}));body.position.y=.75;
+  const head=new THREE.Mesh(new THREE.SphereGeometry(.2,10,8),mkMat({color:0xb8a898}));head.position.y=1.6;
   const lamp=new THREE.Mesh(new THREE.SphereGeometry(.07,6,6),new THREE.MeshBasicMaterial({color:0xfff2c0}));lamp.position.set(.2,1.45,-.25);
-  const cg=new THREE.ConeGeometry(1.5,6,14,1,true);cg.translate(0,-3,0);
-  const cone=new THREE.Mesh(cg,new THREE.MeshBasicMaterial({color:0xfff0c0,transparent:true,opacity:.09,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide}));
-  cone.rotation.x=Math.PI/2;cone.position.set(.2,1.45,-.25);
-  g.add(body,head,lamp,cone);g.visible=false;g.userData.cone=cone;g.userData.lamp=lamp;return g;
+  const glow=new THREE.Sprite(new THREE.SpriteMaterial({map:glowTex(),blending:THREE.AdditiveBlending,depthWrite:false,transparent:true}));
+  glow.scale.set(.95,.95,1);glow.position.set(.2,1.45,-.25);
+  const carryM=new THREE.Mesh(new THREE.BoxGeometry(.2,.32,.2),new THREE.MeshBasicMaterial({color:0xffa030}));carryM.position.set(0,2.1,0);carryM.visible=false;
+  g.add(body,head,lamp,glow,carryM);g.visible=false;g.userData.glow=glow;g.userData.lamp=lamp;g.userData.carry=carryM;return g;
 }
 
 /* ---------- world ---------- */
@@ -336,18 +347,13 @@ function disposeScene(){
   });
   scene=null;
 }
+function beamMesh(mat,h,r){return new THREE.Mesh(new THREE.CylinderGeometry(r,r,h,8,1,true),mat)}
 function buildWorld(){
   ensureRenderer();
   scene=new THREE.Scene();scene.background=new THREE.Color(0x000000);scene.fog=new THREE.FogExp2(0x000000,.078);
   camera=new THREE.PerspectiveCamera(72,innerWidth/innerHeight,.05,70);camera.rotation.order='YXZ';scene.add(camera);
-  flash=null;
-  if(!COMPAT){
-    scene.add(new THREE.AmbientLight(0x2a3044,.38));                     // <- raise for an easier game
-    flash=new THREE.SpotLight(0xffefcf,3,26,.5,.55,1.5);                  // <- flashlight tuning
-    flash.position.set(.15,-.1,0);camera.add(flash);flash.target.position.set(0,0,-5);camera.add(flash.target);
-  }
   const L=layout();
-  const wallMat=mkMat({map:makeTex('wall'),rough:.95});
+  const wallMat=mkMat({map:makeTex('wall')});
   const spots=[];
   for(let z=0;z<GW;z++)for(let x=0;x<GW;x++){
     if(grid[z][x]!==1)continue;let vis=false;
@@ -363,25 +369,37 @@ function buildWorld(){
   const floor=new THREE.Mesh(new THREE.PlaneGeometry(W,W),mkMat({map:ft}));
   floor.rotation.x=-Math.PI/2;floor.position.set(W/2,0,W/2);scene.add(floor);
   const ct=makeTex('ceil');ct.repeat.set(GW,GW);
-  const ceil=new THREE.Mesh(new THREE.PlaneGeometry(W,W),mkMat({map:ct,rough:1}));
+  const ceil=new THREE.Mesh(new THREE.PlaneGeometry(W,W),mkMat({map:ct}));
   ceil.rotation.x=Math.PI/2;ceil.position.set(W/2,WALL_H,W/2);scene.add(ceil);
   const dmat=new THREE.MeshBasicMaterial({map:decalTex(),transparent:true,depthWrite:false});
   const open=[];for(let z=1;z<GW-1;z++)for(let x=1;x<GW-1;x++)if(grid[z][x]===0)open.push([x,z]);
-  for(let i=0;i<44;i++){
+  for(let i=0;i<Math.round(open.length/12);i++){
     const c=open[(Math.random()*open.length)|0],s=1+Math.random()*2.2,p=new THREE.Mesh(new THREE.PlaneGeometry(s,s),dmat);
     p.rotation.x=-Math.PI/2;p.rotation.z=Math.random()*6;p.position.set(tc(c[0])+(Math.random()-.5)*2.4,.012,tc(c[1])+(Math.random()-.5)*2.4);scene.add(p);
   }
   const vt=ventTex();
   L.lk.forEach(l=>{lockers.push(l);const m=mkLocker(vt);m.position.set(l.x,0,l.z);m.rotation.y=Math.atan2(l.fx,l.fz);scene.add(m)});
-  // fuses (+ a see-through-walls rectangular outline used by the Fuse Scanner)
+  // highlight materials (drawn on top of walls so they can be seen from far away)
   frameMat=new THREE.MeshBasicMaterial({color:0xffb040,transparent:true,opacity:.9,depthTest:false,fog:false});
+  skMat=new THREE.MeshBasicMaterial({color:0x40e0ff,transparent:true,opacity:.5,depthTest:false,fog:false,side:THREE.DoubleSide});
+  exMat=new THREE.MeshBasicMaterial({color:0x5dff8a,transparent:true,opacity:.5,depthTest:false,fog:false,side:THREE.DoubleSide});
+  // fuses (+ a see-through-walls rectangular outline used by the Fuse Scanner)
   L.fc.forEach(c=>{
     const g=new THREE.Group();
-    g.add(new THREE.Mesh(new THREE.BoxGeometry(.28,.5,.28),mkMat({color:0x222222,rough:.5,metal:.6})));
+    g.add(new THREE.Mesh(new THREE.BoxGeometry(.28,.5,.28),mkMat({color:0x555555})));
     const core=new THREE.Mesh(new THREE.CylinderGeometry(.09,.09,.36,8),new THREE.MeshBasicMaterial({color:0xffa030}));core.position.y=.05;g.add(core);
     g.position.set(tc(c[0]),.9,tc(c[1]));scene.add(g);
     const frame=mkFrame(.8,1.1,.8,.05,frameMat);frame.position.copy(g.position);frame.visible=false;scene.add(frame);
-    fuses.push({x:g.position.x,z:g.position.z,got:false,mesh:g,frame});
+    fuses.push({x:g.position.x,z:g.position.z,st:0,by:-1,mesh:g,frame});   // st: 0 on the ground, 1 carried, 2 placed
+  });
+  // sockets: socket i takes fuse i; it lights up (beam + ring + radar) once its fuse is picked up
+  L.sc.forEach(c=>{
+    const x=tc(c[0]),z=tc(c[1]);
+    const base=new THREE.Mesh(new THREE.BoxGeometry(.7,.9,.7),mkMat({color:0x3a403a}));base.position.set(x,.45,z);scene.add(base);
+    const core=new THREE.Mesh(new THREE.BoxGeometry(.3,.5,.3),new THREE.MeshBasicMaterial({color:0x551111}));core.position.set(x,1.15,z);scene.add(core);
+    const beam=beamMesh(skMat,16,.12);beam.position.set(x,8,z);beam.visible=false;beam.renderOrder=20;scene.add(beam);
+    const ring=new THREE.Mesh(new THREE.RingGeometry(.85,1.15,24),skMat);ring.rotation.x=-Math.PI/2;ring.position.set(x,.05,z);ring.visible=false;ring.renderOrder=20;scene.add(ring);
+    sockets.push({x,z,core,beam,ring});
   });
   L.bc.forEach(c=>{
     const m=new THREE.Mesh(new THREE.CylinderGeometry(.11,.11,.34,8),new THREE.MeshBasicMaterial({color:0x3fbf62}));
@@ -389,10 +407,13 @@ function buildWorld(){
   });
   const pm=new THREE.Mesh(new THREE.OctahedronGeometry(.3),new THREE.MeshBasicMaterial({color:0x40e0ff}));
   pm.position.set(tc(L.pc[0]),.95,tc(L.pc[1]));scene.add(pm);pu.mesh=pm;pu.x=pm.position.x;pu.z=pm.position.z;
-  exitP={x:tc(L.ex[0]),z:tc(L.ex[1]),open:false};
+  // exit (gets a big green beam once every fuse is placed)
+  exitP={x:tc(L.ex[0]),z:tc(L.ex[1])};
   const sign=new THREE.Sprite(new THREE.SpriteMaterial({map:signTex(false)}));sign.scale.set(2.4,1.2,1);sign.position.set(exitP.x,1.9,exitP.z);scene.add(sign);exitP.sign=sign;
   const ring=new THREE.Mesh(new THREE.RingGeometry(.9,1.15,24),new THREE.MeshBasicMaterial({color:0x661111,side:THREE.DoubleSide}));
   ring.rotation.x=-Math.PI/2;ring.position.set(exitP.x,.03,exitP.z);scene.add(ring);exitP.ring=ring;
+  exitBeam=beamMesh(exMat,20,.22);exitBeam.position.set(exitP.x,10,exitP.z);exitBeam.visible=false;exitBeam.renderOrder=20;scene.add(exitBeam);
+  exitRing=new THREE.Mesh(new THREE.RingGeometry(1.3,1.8,28),exMat);exitRing.rotation.x=-Math.PI/2;exitRing.position.set(exitP.x,.06,exitP.z);exitRing.visible=false;exitRing.renderOrder=20;scene.add(exitRing);
   L.mc.forEach((c,i)=>{
     const mo={id:i,x:tc(c[0]),z:tc(c[1]),ry:0,tx:0,tz:0,tr:0,mode:'patrol',path:[],repath:0,hunt:0,lk:null,arrived:false,d:99,px:0,pz:0,sa:0,grace:8+i*8,mesh:mkMonster(i)};
     mo.tx=mo.px=mo.x;mo.tz=mo.pz=mo.z;scene.add(mo.mesh);mons.push(mo);
@@ -401,10 +422,11 @@ function buildWorld(){
 }
 function resetRound(){
   disposeScene();
-  fuses.length=0;batts.length=0;lockers.length=0;mons.length=0;peers.clear();
+  fuses.length=0;sockets.length=0;batts.length=0;lockers.length=0;mons.length=0;peers.clear();
   me.pitch=0;me.hid=-1;me.saw=false;me.sawBy=-1;me.risk=0;
   flOn=true;batt=100;stam=100;exhausted=false;fuseCount=0;stepAcc=0;bobT=0;noiseR=0;
   hasScan=false;scanUsed=false;scanLeft=0;closeness=0;nearD=99;hb=0;dyT=0;killer=0;lastPrompt='';hidFl=true;tension=0;
+  endgame=false;carry=-1;lastObj='';
   pu.got=false;net.t=0;
   $('btnScan').style.display='none';$('btnLight').classList.add('on');$('slats').style.display='none';$('prompt').textContent='';
 }
@@ -469,7 +491,6 @@ function musicTick(){
   tenGain.gain.setTargetAtTime(tension*.075,AC.currentTime,.4);
   if(tension>.28){pulseT-=.1;if(pulseT<=0){pulseT=.62-tension*.28;tone(52,30,.25,.22*tension,'sine',0,musicBus)}}
 }
-const vibr=p=>vib(p);
 const sfx={
   step:run=>noise(.09,run?.26:.15,220,.8),
   click:()=>{noise(.04,.25,2500,2);tone(1200,600,.05,.1,'square')},
@@ -479,8 +500,9 @@ const sfx={
   door:()=>{noise(.25,.2,300,.6);tone(160,70,.35,.1,'sawtooth')},
   power:()=>{tone(110,520,1,.2,'sawtooth');tone(55,260,1.1,.14,'square');noise(.9,.12,600,.8)},
   gate:()=>{noise(1.6,.3,120,.5);tone(70,40,1.6,.25,'sawtooth')},
+  alarm:()=>{for(let i=0;i<5;i++)tone(520,880,.5,.16,'sawtooth',i*.55);tone(45,30,2.5,.3,'sine')},
   win:()=>{[392,494,587,784].forEach((f,i)=>tone(f,f,.9,.14,'triangle',i*.18))},
-  stinger:d=>{const v=.3*(1-clamp(d/25,0,.9));tone(320,50,1,v,'sawtooth');noise(.6,v*.7,800,.5);tone(95,55,.7,v*.9,'sawtooth');vibr(90)},
+  stinger:d=>{const v=.3*(1-clamp(d/25,0,.9));tone(320,50,1,v,'sawtooth');noise(.6,v*.7,800,.5);tone(95,55,.7,v*.9,'sawtooth');vib(90)},
   growl:v=>{tone(95,52,.7,.16*v,'sawtooth');noise(.6,.14*v,260,.5)},
   scream:()=>{noise(1.4,.7,1200,.3);tone(900,120,1.3,.45,'sawtooth');tone(1300,200,1.2,.25,'square')},
   creak:()=>tone(190+Math.random()*60,80,.9,.05,'sawtooth'),
@@ -495,14 +517,16 @@ const sfx={
 /* ---------- HUD helpers ---------- */
 let msgT=0;
 function toast(t,ms){const m=$('msg');m.textContent=t;m.style.opacity=1;clearTimeout(msgT);msgT=setTimeout(()=>m.style.opacity=0,ms||2400)}
-function updateObj(){
-  $('obj').textContent=fuseCount<NEED?`Find the fuses: ${fuseCount}/${NEED}`:'Power restored. Reach the EXIT.';
-  if(fuseCount>=NEED&&exitP&&!exitP.open){exitP.open=true;exitP.sign.material.map=signTex(true);exitP.sign.material.needsUpdate=true;exitP.ring.material.color.set(0x22aa44)}
+function objText(){
+  if(endgame)return 'ALL FUSES PLACED\nThey know where you are. Reach the glowing EXIT!';
+  return `Fuses placed: ${fuseCount}/${NEED}\n`+(carry>=0?'Carrying a fuse: take it to the glowing socket':'Find the next fuse');
 }
+const carryOf=id=>fuses.findIndex(f=>f.st===1&&f.by===id);
 function findTarget(){
   if(me.hid>=0)return {k:'h',i:me.hid};
   let best=null,bd=2.3;
-  fuses.forEach((f,i)=>{if(!f.got){const d=Math.hypot(f.x-me.x,f.z-me.z);if(d<bd){bd=d;best={k:'f',i}}}});
+  if(carry<0){fuses.forEach((f,i)=>{if(f.st===0){const d=Math.hypot(f.x-me.x,f.z-me.z);if(d<bd){bd=d;best={k:'f',i}}}})}
+  else{const s=sockets[carry];if(s){const d=Math.hypot(s.x-me.x,s.z-me.z);if(d<3&&d<bd){bd=d;best={k:'s',i:carry}}}}
   lockers.forEach((l,i)=>{const d=Math.hypot(l.x-me.x,l.z-me.z);if(d<bd){bd=d;best={k:'h',i}}});
   if(exitP){const d=Math.hypot(exitP.x-me.x,exitP.z-me.z);if(d<2.8&&d<bd)best={k:'x'}}
   return best;
@@ -526,17 +550,20 @@ function drawMap(){
   const pt=(wx,wz)=>{const dx=wx-me.x,dz=wz-me.z;let sx=(dx*cs-dz*sn)*s,sy=(dx*sn+dz*cs)*s,l=Math.hypot(sx,sy),c=false;
     if(l>R-6){sx*=(R-6)/l;sy*=(R-6)/l;c=true}return [C+sx,C+sy,c]};
   const dot=(p,col,r)=>{mx.fillStyle=col;mx.beginPath();mx.arc(p[0],p[1],p[2]?r*.75:r,0,6.2832);mx.fill()};
+  const diamond=(p,col,r)=>{mx.fillStyle=col;mx.beginPath();mx.moveTo(p[0],p[1]-r);mx.lineTo(p[0]+r*.9,p[1]);mx.lineTo(p[0],p[1]+r);mx.lineTo(p[0]-r*.9,p[1]);mx.closePath();mx.fill()};
+  const pulse=(p,col,k)=>{mx.strokeStyle=col;mx.lineWidth=1.4;mx.beginPath();mx.arc(p[0],p[1],5+((time*k)%1)*7,0,6.2832);mx.stroke()};
   const arrow=(p,ax,ay,col,r)=>{mx.save();mx.translate(p[0],p[1]);mx.rotate(Math.atan2(ay,ax));mx.fillStyle=col;mx.beginPath();
     mx.moveTo(r*1.5,0);mx.lineTo(-r,r*.95);mx.lineTo(-r*.45,0);mx.lineTo(-r,-r*.95);mx.closePath();mx.fill();mx.restore()};
-  if(fuseCount>=NEED&&exitP){const p=pt(exitP.x,exitP.z);mx.fillStyle='#5dff8a';mx.beginPath();mx.moveTo(p[0],p[1]-5);mx.lineTo(p[0]+4.5,p[1]);mx.lineTo(p[0],p[1]+5);mx.lineTo(p[0]-4.5,p[1]);mx.closePath();mx.fill()}
+  if(endgame&&exitP){const p=pt(exitP.x,exitP.z);diamond(p,'#5dff8a',7);pulse(p,'#5dff8a',1.5)}
+  // sockets that are waiting for a fuse (their fuse is being carried)
+  fuses.forEach((f,i)=>{if(f.st===1&&sockets[i]){const p=pt(sockets[i].x,sockets[i].z);diamond(p,'#40e0ff',6);pulse(p,'#40e0ff',1.6)}});
   if(scanLeft>0){
-    for(const f of fuses){if(f.got)continue;const p=pt(f.x,f.z);dot(p,'#ffa030',4);
-      mx.strokeStyle='#ffa030';mx.lineWidth=1.2;mx.beginPath();mx.arc(p[0],p[1],5+((time*2)%1)*5,0,6.2832);mx.stroke()}
+    for(const f of fuses){if(f.st!==0)continue;const p=pt(f.x,f.z);dot(p,'#ffa030',4);pulse(p,'#ffa030',2)}
   }
   for(const mo of mons){
     if(!(mo.mode==='hunt'||mo.d<22))continue;       // hunting monsters are always shown (pinned to the rim if far)
     const p=pt(mo.x,mo.z),col=MCSS[mo.id%3];
-    if(mo.mode==='hunt'){mx.strokeStyle=col;mx.lineWidth=1.5;mx.beginPath();mx.arc(p[0],p[1],5+((time*3)%1)*6,0,6.2832);mx.stroke()}
+    if(mo.mode==='hunt')pulse(p,col,3);
     dot(p,col,4.4);
   }
   // other players: coloured arrow showing where they face, white ring + label; stays on the rim when far away
@@ -552,17 +579,36 @@ function drawMap(){
   mx.strokeStyle='rgba(200,210,190,.55)';mx.lineWidth=2;mx.beginPath();mx.arc(C,C,R,0,6.2832);mx.stroke();
 }
 
-/* ---------- interactions ---------- */
-function takeFuse(i){const f=fuses[i];if(!f||f.got)return;f.got=true;f.mesh.visible=false;f.frame.visible=false;sfx.pick()}
+/* ---------- fuses, sockets and the final phase ---------- */
+const recount=()=>{fuseCount=fuses.reduce((a,f)=>a+(f.st===2?1:0),0)};
+function startEndgame(){
+  if(endgame)return;endgame=true;
+  exitP.sign.material.map=signTex(true);exitP.sign.material.needsUpdate=true;exitP.ring.material.color.set(0x22aa44);
+  exitBeam.visible=true;exitRing.visible=true;
+  mons.forEach(m=>{m.grace=0});
+  sfx.alarm();sfx.gate();vib([120,60,120]);
+  toast('ALL FUSES PLACED. THEY KNOW WHERE YOU ARE. REACH THE EXIT!',5200);
+}
+// st: 0 = on the ground, 1 = carried by player "by", 2 = placed in its socket
+function setFuse(i,st,by){
+  const f=fuses[i];if(!f)return;
+  const nb=st===1?by:-1;if(f.st===st&&f.by===nb)return;
+  const prev=f.st;f.st=st;f.by=nb;
+  f.mesh.visible=(st===0);f.frame.visible=false;
+  const s=sockets[i];
+  if(s){s.beam.visible=(st===1);s.ring.visible=(st===1);s.core.material.color.set(st===2?0x44ff88:0x551111)}
+  if(st===1&&prev===0){sfx.pick();if(nb===me.id)toast('Fuse taken. Carry it to the glowing socket!',3200)}
+  if(st===2){sfx.power();if(prev===1&&by===me.id)toast('Fuse placed.',1800)}
+  recount();
+  if(fuseCount>=NEED&&!endgame)startEndgame();
+}
 function winGame(){if(state!=='play')return;state='won';sfx.win();if(role==='host')send({t:'win'});showEnd(true,'The gate groans open. You made it out.')}
-function applyUse(k,i){
-  if(k==='f'&&fuses[i]&&!fuses[i].got){
-    takeFuse(i);fuseCount++;updateObj();sfx.power();if(fuseCount>=NEED)sfx.gate();
-    toast(fuseCount<NEED?'Fuse recovered.':'All fuses placed. The gate is live.')
-  }
+function applyUse(k,i,by){ // host / solo only: the host is the referee
+  if(k==='f'){const f=fuses[i];if(f&&f.st===0&&carryOf(by)<0)setFuse(i,1,by)}
+  else if(k==='s'){const f=fuses[i];if(f&&f.st===1&&f.by===by)setFuse(i,2,by)}
   else if(k==='b'&&batts[i]&&!batts[i].got){batts[i].got=true;batts[i].mesh.visible=false}
   else if(k==='p'&&!pu.got){pu.got=true;pu.mesh.visible=false}
-  else if(k==='x'){if(fuseCount>=NEED)winGame();else toast(`The gate needs ${NEED} fuses.`)}
+  else if(k==='x'){if(endgame)winGame();else toast(`The gate is locked. Place all the fuses first (${fuseCount}/${NEED}).`)}
 }
 function sawBy(px,pz){
   for(let k=0;k<mons.length;k++){const mo=mons[k];if(mo.mode==='hunt'&&Math.hypot(mo.x-px,mo.z-pz)<14&&los(mo.x,mo.z,px,pz))return k}
@@ -571,11 +617,11 @@ function sawBy(px,pz){
 function toggleHide(i){
   const l=lockers[i];if(!l)return;
   if(me.hid<0){
-    me.sawBy=role!=='guest'?sawBy(me.x,me.z):-1;me.saw=me.sawBy>=0;   // a hunting monster with line of sight sees you duck in
+    me.sawBy=(!endgame&&role!=='guest')?sawBy(me.x,me.z):-1;me.saw=me.sawBy>=0;   // before the final phase, a hunting monster with line of sight sees you duck in
     me.hid=i;me.risk=0;hidFl=flOn;flOn=false;$('btnLight').classList.remove('on');
     me.x=l.x;me.z=l.z;me.yaw=hidYaw=Math.atan2(-l.fx,-l.fz);me.pitch=0;
     $('slats').style.display='block';sfx.door();
-    toast(me.saw?'It saw you...':'Stay still. Stay quiet.',2200);
+    toast(endgame?'Safe in here. They will know where you are when you come out.':(me.saw?'It saw you...':'Stay still. Stay quiet.'),2400);
   }else{
     me.x=l.x+l.fx*1.2;me.z=l.z+l.fz*1.2;me.hid=-1;me.saw=false;me.sawBy=-1;me.risk=0;
     flOn=hidFl&&batt>0;$('btnLight').classList.toggle('on',flOn);
@@ -587,9 +633,9 @@ function doUse(){
   if(!t){sfx.click();toast('Nothing here.',1000);return}
   if(t.k==='h'){toggleHide(t.i);return}
   if(role==='guest'){
-    if(t.k==='x'&&fuseCount<NEED){toast(`The gate needs ${NEED} fuses.`);return}
+    if(t.k==='x'&&!endgame){toast(`The gate is locked. Place all the fuses first (${fuseCount}/${NEED}).`);return}
     send({t:'use',k:t.k,i:t.i});
-  }else applyUse(t.k,t.i);
+  }else applyUse(t.k,t.i,me.id);
 }
 function useScan(){
   if(state!=='play'||!hasScan||scanUsed)return;
@@ -628,9 +674,9 @@ function movePlayer(dt){
 }
 function lightUpdate(dt){
   if(flOn){batt-=.62*dt;if(batt<=0){batt=0;flOn=false;$('btnLight').classList.remove('on');toast('The flashlight dies...')}}
-  let I=flOn?3:0;
-  if(flOn&&(batt<18||(nearD<12&&closeness>.4))&&Math.random()<.18)I*=.15;
-  if(COMPAT)FLU.uFlI.value=I/3*2.4;else if(flash)flash.intensity=I;
+  let I=flOn?1:0;
+  if(flOn&&(batt<18||(nearD<12&&closeness>.4))&&Math.random()<.18)I*=.15;   // flickers when low or when a monster is close
+  FLU.uFlI.value=I*FL_POWER;
 }
 function pickups(){
   batts.forEach((b,i)=>{
@@ -659,12 +705,19 @@ function monsterAI(dt){
   for(let k=0;k<mons.length;k++){
     const mo=mons[k];mo.grace-=dt;
     let best=null,bd=1e9;
-    for(const p of ps){if(p.hid)continue;const d=Math.hypot(p.x-mo.x,p.z-mo.z);if(d<bd){bd=d;best=p}}   // hidden players can't be seen or heard
-    const seen=!!best&&bd<SIGHT&&los(mo.x,mo.z,best.x,best.z)&&(best.fl||bd<SIGHT_DARK);
-    const heard=!!best&&bd<best.noise;
-    for(const p of ps){if(p.hid&&p.ref.saw&&p.ref.sawBy===k){mo.mode='hunt';mo.hunt=Math.max(mo.hunt,5);mo.lk={x:p.x,z:p.z};mo.arrived=false}}
-    if(mo.grace<=0&&(seen||heard)){if(mo.mode!=='hunt')sfx.stinger(mo.d);mo.mode='hunt';mo.hunt=7;mo.lk={x:best.x,z:best.z};mo.arrived=false}
-    else if(mo.mode==='hunt'){mo.hunt-=dt;if(mo.hunt<=0){mo.mode='patrol';mo.path=[];mo.arrived=false}}
+    for(const p of ps){if(p.hid)continue;const d=Math.hypot(p.x-mo.x,p.z-mo.z);if(d<bd){bd=d;best=p}}   // hidden players can't be targeted
+    let seen=false,heard=false;
+    if(endgame){
+      // final phase: the monsters always know where everyone outside a locker is. If everyone is hidden they just roam.
+      if(best){mo.mode='hunt';mo.hunt=9;mo.lk={x:best.x,z:best.z};mo.arrived=false;seen=bd<SIGHT&&los(mo.x,mo.z,best.x,best.z)}
+      else if(mo.mode==='hunt'){mo.mode='patrol';mo.path=[];mo.arrived=false}
+    }else{
+      seen=!!best&&bd<SIGHT&&los(mo.x,mo.z,best.x,best.z)&&(best.fl||bd<SIGHT_DARK);
+      heard=!!best&&bd<best.noise;
+      for(const p of ps){if(p.hid&&p.ref.saw&&p.ref.sawBy===k){mo.mode='hunt';mo.hunt=Math.max(mo.hunt,5);mo.lk={x:p.x,z:p.z};mo.arrived=false}}
+      if(mo.grace<=0&&(seen||heard)){if(mo.mode!=='hunt')sfx.stinger(mo.d);mo.mode='hunt';mo.hunt=7;mo.lk={x:best.x,z:best.z};mo.arrived=false}
+      else if(mo.mode==='hunt'){mo.hunt-=dt;if(mo.hunt<=0){mo.mode='patrol';mo.path=[];mo.arrived=false}}
+    }
     mo.repath-=dt;
     const spd=mo.mode==='hunt'?MONSTER_SPEED:PATROL_SPEED;
     const mt=[Math.floor(mo.x/T),Math.floor(mo.z/T)];
@@ -689,19 +742,21 @@ function monsterAI(dt){
       if(d<=st){mo.x=w.x;mo.z=w.z;mo.path.shift()}else{mo.x+=dx/d*st;mo.z+=dz/d*st}
       if(d>.01)mo.ry=Math.atan2(dx,dz);
     }
-    for(const p of ps)if(!p.hid&&Math.hypot(p.x-mo.x,p.z-mo.z)<CATCH){die(k);return}
+    for(const p of ps)if(!p.hid&&Math.hypot(p.x-mo.x,p.z-mo.z)<CATCH){die(k);return}   // a hidden player can never be caught in the final phase
   }
-  // hiding risk: a hunting monster that lingers next to your locker will open it
-  for(const p of ps){
-    if(!p.hid)continue;
-    const r=p.ref;let near=false,nk=0,nd=1e9;
-    mons.forEach((mo,k)=>{
-      const d=Math.hypot(p.x-mo.x,p.z-mo.z);
-      if(d<nd){nd=d;nk=k}
-      if(d<2.4&&(mo.mode==='hunt'||(r.saw&&r.sawBy===k)))near=true;
-    });
-    r.risk=near?r.risk+dt:Math.max(0,r.risk-dt*.5);
-    if(r.risk>(r.saw?1:3.5)){die(nk);return}
+  // before the final phase: a hunting monster that lingers next to your locker will open it
+  if(!endgame){
+    for(const p of ps){
+      if(!p.hid)continue;
+      const r=p.ref;let near=false,nk=0,nd=1e9;
+      mons.forEach((mo,k)=>{
+        const d=Math.hypot(p.x-mo.x,p.z-mo.z);
+        if(d<nd){nd=d;nk=k}
+        if(d<2.4&&(mo.mode==='hunt'||(r.saw&&r.sawBy===k)))near=true;
+      });
+      r.risk=near?r.risk+dt:Math.max(0,r.risk-dt*.5);
+      if(r.risk>(r.saw?1:3.5)){die(nk);return}
+    }
   }
 }
 function monsterFollow(dt){
@@ -716,7 +771,7 @@ function die(k){
 function dyingTick(dt){
   dyT+=dt;const mo=mons[killer]||mons[0],dx=mo.x-me.x,dz=mo.z-me.z,ty=Math.atan2(-dx,-dz);
   me.yaw+=Math.atan2(Math.sin(ty-me.yaw),Math.cos(ty-me.yaw))*Math.min(1,dt*10);me.pitch+=(.15-me.pitch)*Math.min(1,dt*6);
-  if(dyT>1.7)showEnd(false,me.hid>=0?'It opened the locker.':'You should have kept moving.');
+  if(dyT>1.7)showEnd(false,me.hid>=0?'It opened the locker.':(endgame?'So close to the exit.':'You should have kept moving.'));
 }
 function showEnd(win,msg){
   state='over';tension=0;
@@ -731,8 +786,8 @@ function beginRound(seed,r,id,n){
   initAudio();resetRound();genMaze(seed);buildWorld();
   layoutOpen=[];for(let z=1;z<GW-1;z++)for(let x=1;x<GW-1;x++)if(grid[z][x]===0)layoutOpen.push([x,z]);
   $('menu').style.display='none';$('end').style.display='none';$('hud').style.display='block';
-  state='play';updateObj();
-  toast(r==='solo'?'They are out there. Watch the radar.':`You are P${me.id+1}. Stay close, and watch the radar.`,3600);
+  state='play';
+  toast(r==='solo'?'Find the fuses and carry each to its glowing socket.':`You are P${me.id+1}. The halls are bigger with more of you. Stay close.`,3800);
   if(!clock)clock=new THREE.Clock();else clock.getDelta();
   if(!looping){looping=true;loop()}
 }
@@ -758,13 +813,14 @@ function getPeer(id){
 function dropPeer(id){
   const p=peers.get(id);if(!p||!p.active)return;
   p.active=false;if(p.mesh)p.mesh.visible=false;toast('Player '+(id+1)+' left.',2500);
+  fuses.forEach((f,i)=>{if(f.st===1&&f.by===id)setFuse(i,0,-1)});   // a fuse they were carrying goes back where it started
 }
 function setPeer(id,a){
   if(!scene||id===undefined||id===me.id)return;
   const p=getPeer(id),now=performance.now()/1000,hid=a[4]||0,prev=p.hid||0;
   if(!p.active){p.active=true;p.x=p.tx=a[0];p.z=p.tz=a[1];p.yaw=p.tyaw=a[2];p.mesh.visible=true;p.lastT=0}
   else if(p.lastT){const dt=now-p.lastT;if(dt>0)p.v=Math.hypot(a[0]-p.tx,a[1]-p.tz)/dt}
-  if(role==='host'&&!prev&&hid){p.sawBy=sawBy(a[0],a[1]);p.saw=p.sawBy>=0;p.risk=0}
+  if(role==='host'&&!prev&&hid&&!endgame){p.sawBy=sawBy(a[0],a[1]);p.saw=p.sawBy>=0;p.risk=0}
   if(!hid){p.saw=false;p.sawBy=-1;p.risk=0}
   p.hid=hid;p.lastT=now;p.tx=a[0];p.tz=a[1];p.tyaw=a[2];p.fl=!!a[3];
 }
@@ -774,7 +830,7 @@ function onNet(m,from){
     case 'restart':beginRound(m.seed,'guest',me.id,nPlayers);break;
     case 'retry':if(role==='host'&&state==='over')hostRestart();break;
     case 'p':if(role==='host')setPeer(from,m.p);break;
-    case 'use':if(role==='host'&&state==='play')applyUse(m.k,m.i);break;
+    case 'use':if(role==='host'&&state==='play')applyUse(m.k,m.i,from);break;
     case 'dead':die(m.k);break;
     case 'win':winGame();break;
     case 's':{
@@ -785,10 +841,9 @@ function onNet(m,from){
         const h=a[3]===1;if(h&&mo.mode!=='hunt')sfx.stinger(mo.d);mo.mode=h?'hunt':'patrol';
       });
       m.pl.forEach(e=>{if(e[0]!==me.id)setPeer(e[0],[e[1],e[2],e[3],e[4],e[5]])});
-      m.f.split('').forEach((c,i)=>{if(c==='1'&&fuses[i]&&!fuses[i].got)takeFuse(i)});
+      m.f.split('').forEach((c,i)=>setFuse(i,+c,m.fb[i]));
       m.b.split('').forEach((c,i)=>{if(c==='1'&&batts[i]&&!batts[i].got){batts[i].got=true;batts[i].mesh.visible=false}});
       if(m.u&&!pu.got){pu.got=true;pu.mesh.visible=false}
-      if(m.k!==fuseCount){const up=m.k>fuseCount;fuseCount=m.k;updateObj();if(up){sfx.power();if(fuseCount>=NEED)sfx.gate()}}
       break;
     }
   }
@@ -800,7 +855,7 @@ function netTick(dt){
   if(role==='host'){
     const pl=[[0].concat(me5)];
     peers.forEach(p=>{if(p.active)pl.push([p.id,r2(p.tx),r2(p.tz),r2(p.tyaw),p.fl?1:0,p.hid])});
-    send({t:'s',m:mons.map(mo=>[r2(mo.x),r2(mo.z),r2(mo.ry),mo.mode==='hunt'?1:0]),pl,f:fuses.map(f=>+f.got).join(''),b:batts.map(b=>+b.got).join(''),u:+pu.got,k:fuseCount});
+    send({t:'s',m:mons.map(mo=>[r2(mo.x),r2(mo.z),r2(mo.ry),mo.mode==='hunt'?1:0]),pl,f:fuses.map(f=>f.st).join(''),fb:fuses.map(f=>f.by),b:batts.map(b=>+b.got).join(''),u:+pu.got});
   }else send({t:'p',p:me5});
 }
 
@@ -926,13 +981,14 @@ async function btJoin(){
 
 /* ---------- main loop ---------- */
 function animateWorld(dt){
-  fuses.forEach((f,i)=>{if(!f.got){f.mesh.rotation.y+=dt*1.5;f.mesh.position.y=.9+Math.sin(time*2+i)*.06}});
+  fuses.forEach((f,i)=>{if(f.st===0){f.mesh.rotation.y+=dt*1.5;f.mesh.position.y=.9+Math.sin(time*2+i)*.06}});
   batts.forEach((b,i)=>{if(!b.got){b.mesh.rotation.y+=dt*2;b.mesh.position.y=.45+Math.sin(time*2.4+i)*.04}});
   if(!pu.got){pu.mesh.rotation.y+=dt*2;pu.mesh.position.y=.95+Math.sin(time*2.2)*.08}
+  skMat.opacity=.35+.2*Math.sin(time*5);exMat.opacity=.4+.25*Math.sin(time*4);
   if(scanLeft>0){
     scanLeft-=dt;const on=scanLeft>0;frameMat.opacity=.65+.3*Math.sin(time*6);
     fuses.forEach(f=>{
-      const vis=on&&!f.got;f.frame.visible=vis;
+      const vis=on&&f.st===0;f.frame.visible=vis;
       if(vis)f.frame.scale.setScalar(1+Math.min(Math.hypot(f.x-me.x,f.z-me.z),36)/9);   // bigger when far so it stays easy to spot
     });
   }
@@ -948,7 +1004,8 @@ function animateWorld(dt){
     const k=Math.min(1,dt*10);p.x+=(p.tx-p.x)*k;p.z+=(p.tz-p.z)*k;
     p.yaw+=Math.atan2(Math.sin(p.tyaw-p.yaw),Math.cos(p.tyaw-p.yaw))*k;
     p.mesh.position.set(p.x,0,p.z);p.mesh.rotation.y=p.yaw;
-    p.mesh.visible=!p.hid;p.mesh.userData.cone.visible=p.fl;p.mesh.userData.lamp.visible=p.fl;
+    p.mesh.visible=!p.hid;p.mesh.userData.glow.visible=p.fl;p.mesh.userData.lamp.visible=p.fl;
+    p.mesh.userData.carry.visible=fuses.some(f=>f.st===1&&f.by===p.id);
   });
 }
 function updateCamera(){
@@ -959,19 +1016,21 @@ function updateCamera(){
 function hud(){
   $('bBatt').style.width=batt+'%';$('bBatt').style.background=batt<20?'#a22':'#cfc27a';
   $('bStam').style.width=stam+'%';$('bStam').style.background=exhausted?'#a22':'#6a8a6a';
+  const ot=objText();if(ot!==lastObj){lastObj=ot;$('obj').textContent=ot}
   if(hasScan){
     const b=$('btnScan');
     if(scanLeft>0){b.textContent='SCAN '+Math.ceil(scanLeft);b.classList.add('act')}
     else{b.classList.remove('act');if(scanUsed)b.style.display='none'}
   }
   const t=state==='play'?findTarget():null;
-  const txt=t?(t.k==='f'?'Take the fuse':t.k==='h'?(me.hid>=0?'Leave the locker':'Hide in the locker'):t.k==='x'?(fuseCount>=NEED?'Open the gate':`Gate locked — needs ${NEED} fuses`):''):'';
+  const txt=t?(t.k==='f'?'Take the fuse':t.k==='s'?'Place the fuse':t.k==='h'?(me.hid>=0?'Leave the locker':'Hide in the locker'):t.k==='x'?(endgame?'Open the gate':`Gate locked — place all fuses (${fuseCount}/${NEED})`):''):'';
   if(txt!==lastPrompt){lastPrompt=txt;$('prompt').textContent=txt;$('btnUse').classList.toggle('ready',!!t)}
   $('flash').style.opacity=state==='dying'?.5+Math.random()*.4:closeness*closeness*.5;
   if((mapTick++&1)===0)drawMap();
 }
 function update(dt){
   time+=dt;
+  carry=carryOf(me.id);
   if(state==='play'){
     if(me.hid<0){movePlayer(dt);pickups()}
     else{noiseR=0;stam=Math.min(100,stam+14*dt);if(exhausted&&stam>30)exhausted=false;me.yaw=clamp(me.yaw,hidYaw-.9,hidYaw+.9)}
@@ -1043,13 +1102,11 @@ document.addEventListener('pointerdown',e=>{initAudio();if(e.target.closest&&e.t
 function syncMenuBtns(){
   $('bMusic').textContent='MUSIC: '+(SET.music?'ON':'OFF');
   $('bSfx').textContent='SOUND FX: '+(SET.sfx?'ON':'OFF');
-  $('bLighting').textContent='LIGHTING: '+(COMPAT?'COMPATIBLE':'STANDARD');
   $('btnMute').textContent=SET.music?'♪':'×';
 }
 function toggleMusic(){SET.music=!SET.music;saveSet();if(musicBus)musicBus.gain.setTargetAtTime(SET.music?.55:0,AC.currentTime,.1);syncMenuBtns()}
 $('bMusic').onclick=toggleMusic;press('btnMute',toggleMusic);
 $('bSfx').onclick=()=>{SET.sfx=!SET.sfx;saveSet();if(sfxBus)sfxBus.gain.setTargetAtTime(SET.sfx?1:0,AC.currentTime,.05);syncMenuBtns()};
-$('bLighting').onclick=()=>{COMPAT=!COMPAT;SET.compat=COMPAT;saveSet();syncMenuBtns()};
 syncMenuBtns();
 
 $('bSolo').onclick=()=>{initAudio();net.bt=false;beginRound((Math.random()*1e9)|0,'solo',0,1)};
