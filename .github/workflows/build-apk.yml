@@ -44,7 +44,14 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: 
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Prepare web assets (bundle Three.js so the APK works offline)
+        run: |
 
       - name: Prepare web assets (bundle Three.js so the APK works offline)
         run: |
