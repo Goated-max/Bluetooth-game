@@ -403,15 +403,90 @@ function animMonster(mo,mv,dt){
   r.rags.forEach((m,k)=>{m.rotation.x=.18+Math.sin(time*3+k)*.08+gait*.35});
 }
 
-function mkRemote(id){ // another player: coloured body + a small glowing lamp (when their flashlight is on) + a fuse over the head when carrying one
+/* ---------- other players: a proper human explorer (faces -Z, like the camera) ---------- */
+function nameTag(id){
+  const c=document.createElement('canvas');c.width=128;c.height=64;const g=c.getContext('2d');
+  g.fillStyle='rgba(0,0,0,.55)';g.fillRect(8,12,112,40);g.strokeStyle=PCSS[id%4];g.lineWidth=3;g.strokeRect(8,12,112,40);
+  g.fillStyle=PCSS[id%4];g.font='bold 30px Courier New';g.textAlign='center';g.textBaseline='middle';g.fillText('P'+(id+1),64,33);
+  const s=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(c),transparent:true,fog:false,depthWrite:false}));
+  s.scale.set(.5,.25,1);s.position.y=2.3;return s;
+}
+function mkRemote(id){
   const g=new THREE.Group();
-  const body=new THREE.Mesh(new THREE.CylinderGeometry(.25,.28,1.3,8),mkMat({color:PCOL[id%4]}));body.position.y=.75;
-  const head=new THREE.Mesh(new THREE.SphereGeometry(.2,10,8),mkMat({color:0xb8a898}));head.position.y=1.6;
-  const lamp=new THREE.Mesh(new THREE.SphereGeometry(.07,6,6),new THREE.MeshBasicMaterial({color:0xfff2c0}));lamp.position.set(.2,1.45,-.25);
+  const jc=new THREE.Color(PCOL[id%4]).multiplyScalar(.72).getHex();
+  const jacket=mkMat({color:jc}),pants=mkMat({color:0x2a3140}),boot=mkMat({color:0x15151a}),glove=mkMat({color:0x23242a});
+  const skinM=mkMat({color:[0xe2b793,0xbf8a62,0x8d5a3b,0xf1cfb3][id%4]}),pack=mkMat({color:0x3a3f33}),beanie=mkMat({color:PCOL[id%4]});
+  const band=mkMat({color:jc}),strip=mkMat({color:0xe8e4c8}),metal=mkMat({color:0x44464c}),eyeM=new THREE.MeshBasicMaterial({color:0x111111});
+  // legs
+  const legs=new THREE.Group();legs.position.y=.96;g.add(legs);
+  const mkLeg=sx=>{
+    const hip=new THREE.Group();hip.position.set(sx*.1,0,0);
+    hip.add(limb(.45,.08,.062,pants));
+    const knee=new THREE.Group();knee.position.y=-.45;hip.add(knee);
+    knee.add(limb(.44,.058,.048,pants));
+    const bt=new THREE.Mesh(new THREE.BoxGeometry(.11,.09,.27),boot);bt.position.set(0,-.46,-.05);knee.add(bt);
+    legs.add(hip);return {hip,knee};
+  };
+  const legL=mkLeg(-1),legR=mkLeg(1);
+  // torso with jacket, reflective stripe, collar, backpack
+  const body=new THREE.Group();body.position.y=.96;g.add(body);
+  body.add(new THREE.Mesh(new THREE.BoxGeometry(.34,.16,.2),pants));
+  const torso=new THREE.Mesh(new THREE.CylinderGeometry(.215,.18,.58,10),jacket);torso.position.y=.38;torso.scale.z=.62;body.add(torso);
+  const stripe=new THREE.Mesh(new THREE.BoxGeometry(.44,.035,.28),strip);stripe.position.set(0,.34,0);body.add(stripe);
+  const collar=new THREE.Mesh(new THREE.CylinderGeometry(.1,.125,.06,10),jacket);collar.position.y=.69;body.add(collar);
+  const bp=new THREE.Mesh(new THREE.BoxGeometry(.28,.38,.13),pack);bp.position.set(0,.42,.17);body.add(bp);
+  for(const sx of [-1,1]){const st=new THREE.Mesh(new THREE.BoxGeometry(.04,.42,.02),pack);st.position.set(sx*.1,.42,-.125);body.add(st)}
+  // neck + head: skin, beanie, face, headlamp
+  const neck=new THREE.Mesh(new THREE.CylinderGeometry(.05,.056,.12,8),skinM);neck.position.y=.74;body.add(neck);
+  const head=new THREE.Group();head.position.y=.9;body.add(head);
+  const skull=new THREE.Mesh(new THREE.SphereGeometry(.115,12,10),skinM);skull.scale.set(.9,1.05,1);head.add(skull);
+  const cap=new THREE.Mesh(new THREE.SphereGeometry(.126,12,8,0,Math.PI*2,0,Math.PI*.55),beanie);cap.position.y=.02;head.add(cap);
+  const capBand=new THREE.Mesh(new THREE.CylinderGeometry(.128,.128,.035,12),band);capBand.position.y=.03;head.add(capBand);
+  for(const sx of [-1,1]){const e=new THREE.Mesh(new THREE.SphereGeometry(.014,6,6),eyeM);e.position.set(sx*.04,.005,-.108);head.add(e)}
+  const nose=new THREE.Mesh(new THREE.BoxGeometry(.02,.03,.025),skinM);nose.position.set(0,-.02,-.118);head.add(nose);
+  const hl=new THREE.Mesh(new THREE.CylinderGeometry(.024,.024,.022,10),metal);hl.rotation.x=Math.PI/2;hl.position.set(0,.075,-.122);head.add(hl);
+  const hLens=new THREE.Mesh(new THREE.CylinderGeometry(.017,.017,.01,10),new THREE.MeshBasicMaterial({color:0xfff6d0}));hLens.rotation.x=Math.PI/2;hLens.position.set(0,.075,-.134);head.add(hLens);
+  // arms (shoulder -> elbow -> glove)
+  const mkArm=sx=>{
+    const sh=new THREE.Group();sh.position.set(sx*.27,.64,0);
+    sh.add(new THREE.Mesh(new THREE.SphereGeometry(.062,8,6),jacket));
+    sh.add(limb(.3,.056,.048,jacket));
+    const el=new THREE.Group();el.position.y=-.3;sh.add(el);
+    el.add(limb(.27,.047,.04,jacket));
+    const hand=new THREE.Mesh(new THREE.SphereGeometry(.046,8,6),glove);hand.position.y=-.3;el.add(hand);
+    body.add(sh);return {sh,el};
+  };
+  const armL=mkArm(-1),armR=mkArm(1);
+  // flashlight in the right hand (held out in front)
+  const fl=new THREE.Group();fl.position.set(.27,.68,-.56);body.add(fl);
+  const fb=new THREE.Mesh(new THREE.CylinderGeometry(.03,.034,.2,8),metal);fb.rotation.x=Math.PI/2;fl.add(fb);
+  const fh=new THREE.Mesh(new THREE.CylinderGeometry(.046,.032,.07,10),metal);fh.rotation.x=Math.PI/2;fh.position.z=-.12;fl.add(fh);
+  const fLens=new THREE.Mesh(new THREE.CylinderGeometry(.04,.04,.01,10),new THREE.MeshBasicMaterial({color:0xfff6d0}));fLens.rotation.x=Math.PI/2;fLens.position.z=-.158;fl.add(fLens);
   const glow=new THREE.Sprite(new THREE.SpriteMaterial({map:glowTex(),blending:THREE.AdditiveBlending,depthWrite:false,transparent:true}));
-  glow.scale.set(.95,.95,1);glow.position.set(.2,1.45,-.25);
-  const carryM=new THREE.Mesh(new THREE.BoxGeometry(.2,.32,.2),new THREE.MeshBasicMaterial({color:0xffa030}));carryM.position.set(0,2.1,0);carryM.visible=false;
-  g.add(body,head,lamp,glow,carryM);g.visible=false;g.userData.glow=glow;g.userData.lamp=lamp;g.userData.carry=carryM;return g;
+  glow.scale.set(.9,.9,1);glow.position.set(0,0,-.2);fl.add(glow);
+  // the fuse they are carrying (held in front of the chest)
+  const carryG=new THREE.Group();carryG.position.set(0,.68,-.5);carryG.visible=false;body.add(carryG);
+  carryG.add(new THREE.Mesh(new THREE.BoxGeometry(.2,.32,.2),mkMat({color:0x555555})));
+  const cc=new THREE.Mesh(new THREE.CylinderGeometry(.06,.06,.24,8),new THREE.MeshBasicMaterial({color:0xffa030}));cc.position.y=.03;carryG.add(cc);
+  g.add(nameTag(id));
+  g.scale.setScalar(.9);
+  g.visible=false;
+  g.userData={glow,lamps:[fLens,hLens],carry:carryG,rig:{legL,legR,armL,armR,body,head}};
+  return g;
+}
+function animPeer(p,dt,carrying){
+  const u=p.mesh.userData.rig;
+  const mv=p.v>.6?clamp(p.v/SPRINT,.25,1.2):0,amp=mv*.8;
+  p.ph+=dt*(2.5+p.v*1.25);
+  const s=Math.sin(p.ph),c=Math.cos(p.ph);
+  u.legL.hip.rotation.x=s*amp;u.legR.hip.rotation.x=-s*amp;
+  u.legL.knee.rotation.x=-Math.max(0,c)*amp*1.1;u.legR.knee.rotation.x=-Math.max(0,-c)*amp*1.1;
+  u.armR.sh.rotation.x=1.2;u.armR.el.rotation.x=.4;                       // right arm holds the flashlight out
+  if(carrying){u.armL.sh.rotation.x=1.2;u.armL.el.rotation.x=.45}          // both hands hold the fuse
+  else{u.armL.sh.rotation.x=-s*amp*.9;u.armL.el.rotation.x=.15+Math.max(0,s)*amp*.4}
+  u.body.rotation.x=-(.03+mv*.22);                                         // lean forward (forward = -Z)
+  u.body.position.y=.96+Math.abs(s)*.035*amp+Math.sin(time*1.8+p.id)*.004; // bob + breathing
+  u.head.rotation.x=-u.body.rotation.x*.8;
 }
 
 /* ---------- world ---------- */
@@ -452,7 +527,7 @@ function buildWorld(){
   const ct=makeTex('ceil');ct.repeat.set(GW,GW);
   const ceil=new THREE.Mesh(new THREE.PlaneGeometry(W,W),mkMat({map:ct}));
   ceil.rotation.x=Math.PI/2;ceil.position.set(W/2,WALL_H,W/2);scene.add(ceil);
-  // blood puddles: lit by the flashlight like everything else, so they no longer glow in the dark
+  // blood puddles: lit by the flashlight like everything else, so they don't glow in the dark
   const dmat=new THREE.MeshBasicMaterial({map:decalTex(),transparent:true,depthWrite:false});dmat.onBeforeCompile=hookFl;
   const open=[];for(let z=1;z<GW-1;z++)for(let x=1;x<GW-1;x++)if(grid[z][x]===0)open.push([x,z]);
   for(let i=0;i<Math.round(open.length/12);i++){
@@ -950,7 +1025,7 @@ function send(o,toLogical){
 function setStat(t){$('netStat').textContent=t}
 function getPeer(id){
   let p=peers.get(id);
-  if(!p){p={id,active:false,x:0,z:0,tx:0,tz:0,yaw:0,tyaw:0,fl:false,v:0,lastT:0,hid:0,saw:false,sawBy:-1,risk:0,mesh:mkRemote(id)};scene.add(p.mesh);peers.set(id,p)}
+  if(!p){p={id,active:false,x:0,z:0,tx:0,tz:0,yaw:0,tyaw:0,fl:false,v:0,ph:0,lastT:0,hid:0,saw:false,sawBy:-1,risk:0,mesh:mkRemote(id)};scene.add(p.mesh);peers.set(id,p)}
   return p;
 }
 function dropPeer(id){
@@ -1146,8 +1221,9 @@ function animateWorld(dt){
     const k=Math.min(1,dt*10);p.x+=(p.tx-p.x)*k;p.z+=(p.tz-p.z)*k;
     p.yaw+=Math.atan2(Math.sin(p.tyaw-p.yaw),Math.cos(p.tyaw-p.yaw))*k;
     p.mesh.position.set(p.x,0,p.z);p.mesh.rotation.y=p.yaw;
-    p.mesh.visible=!p.hid;p.mesh.userData.glow.visible=p.fl;p.mesh.userData.lamp.visible=p.fl;
-    p.mesh.userData.carry.visible=fuses.some(f=>f.st===1&&f.by===p.id);
+    const u=p.mesh.userData,carrying=fuses.some(f=>f.st===1&&f.by===p.id);
+    p.mesh.visible=!p.hid;u.glow.visible=p.fl;u.lamps.forEach(m=>{m.visible=p.fl});u.carry.visible=carrying;
+    animPeer(p,dt,carrying);
   });
 }
 function updateCamera(){
@@ -1288,4 +1364,4 @@ $('bMenu').onclick=leaveGame;
 })();
 </script>
 </body>
-  </html>
+    </html>
