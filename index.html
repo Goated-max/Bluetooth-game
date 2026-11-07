@@ -13,13 +13,16 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;font-family:"Cour
 #slats{position:fixed;inset:0;display:none;pointer-events:none;background:repeating-linear-gradient(180deg,#000 0 14px,rgba(0,0,0,0) 14px 24px);box-shadow:inset 0 0 0 7vmin #000}
 #hud{position:fixed;inset:0;display:none;pointer-events:none}
 #touch{position:absolute;inset:0;pointer-events:auto;z-index:1}
-#obj{position:absolute;top:calc(10px + env(safe-area-inset-top));left:calc(14px + env(safe-area-inset-left));font-size:13px;line-height:1.35;white-space:pre;max-width:60vw;text-shadow:0 0 6px #000;z-index:2}
+#obj{position:absolute;top:calc(10px + env(safe-area-inset-top));left:calc(14px + env(safe-area-inset-left));font-size:13px;line-height:1.35;white-space:pre;max-width:46vw;text-shadow:0 0 6px #000;z-index:2}
 .bars{position:absolute;top:calc(58px + env(safe-area-inset-top));left:calc(14px + env(safe-area-inset-left));z-index:2}
 .bar{width:120px;height:7px;border:1px solid rgba(200,210,190,.4);margin-bottom:5px;background:rgba(0,0,0,.5)}
 .bar i{display:block;height:100%;width:100%}
 .lbl{font-size:10px;opacity:.6;margin-bottom:1px}
-#mapwrap{position:absolute;top:calc(10px + env(safe-area-inset-top));right:calc(12px + env(safe-area-inset-right));width:min(30vmin,150px);height:min(30vmin,150px);z-index:2;pointer-events:none}
+#mapwrap{position:absolute;top:calc(10px + env(safe-area-inset-top));right:calc(12px + env(safe-area-inset-right));width:min(30vmin,150px);height:min(30vmin,150px);z-index:4;pointer-events:auto}
 #map{width:100%;height:100%;display:block}
+#bigmap{position:absolute;inset:0;display:none;z-index:6;background:rgba(0,0,0,.78);align-items:center;justify-content:center;flex-direction:column;pointer-events:auto}
+#bigc{width:min(84vmin,540px);height:min(84vmin,540px);border:1px solid #3a4636;background:#070a07}
+#bigcap{margin-top:8px;font-size:11px;opacity:.6}
 #msg{position:absolute;top:26%;left:0;right:0;text-align:center;font-size:16px;text-shadow:0 0 8px #000;opacity:0;transition:opacity .5s;z-index:2;padding:0 14vmin}
 #prompt{position:absolute;bottom:calc(5vmin + env(safe-area-inset-bottom));left:0;right:0;text-align:center;font-size:13px;color:#ffb347;text-shadow:0 0 6px #000;z-index:2}
 #joy{position:absolute;left:7vmin;bottom:9vmin;width:26vmin;height:26vmin;max-width:130px;max-height:130px;border-radius:50%;border:2px solid rgba(200,210,190,.28);background:rgba(20,24,20,.25);opacity:.7;z-index:2}
@@ -34,10 +37,12 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;font-family:"Cour
 #btnScan{display:none;right:calc(5vmin + 22vmin + env(safe-area-inset-right));bottom:calc(8vmin + 19vmin + env(safe-area-inset-bottom));width:15vmin;height:15vmin;max-width:80px;max-height:80px;font-size:10px;border-color:#40e0ff;color:#40e0ff}
 #btnScan.act{box-shadow:0 0 16px rgba(64,224,255,.6)}
 #btnMute{left:calc(14px + env(safe-area-inset-left));top:calc(126px + env(safe-area-inset-top));width:34px;height:34px;font-size:16px}
-#menu,#end{position:fixed;inset:0;z-index:10;background:radial-gradient(ellipse at center,#0b0f0b 0%,#000 75%);display:flex;padding:12px;overflow-y:auto}
+#btnPause{left:50%;margin-left:-20px;top:calc(8px + env(safe-area-inset-top));width:40px;height:40px;font-size:14px;letter-spacing:1px}
+#menu,#end,#pause{position:fixed;inset:0;z-index:10;background:radial-gradient(ellipse at center,#0b0f0b 0%,#000 75%);display:flex;padding:12px;overflow-y:auto}
 #menu,#menu *{touch-action:pan-y}
 #menuIn{margin:auto;display:flex;flex-direction:column;align-items:center;text-align:center;width:100%;max-width:460px}
 #end{display:none;background:rgba(0,0,0,.88);flex-direction:column;align-items:center;justify-content:center;text-align:center}
+#pause{display:none;z-index:12;background:rgba(0,0,0,.84);flex-direction:column;align-items:center;justify-content:center;text-align:center}
 h1{font-size:clamp(28px,8vmin,56px);letter-spacing:.18em;margin:0 0 6px;color:#c9d3bd;animation:fk 4s infinite}
 @keyframes fk{0%,91%,95%,100%{opacity:1}92%{opacity:.25}93%{opacity:.9}94%{opacity:.15}}
 .sub{opacity:.65;font-size:13px;max-width:420px;margin:0 0 18px}
@@ -68,6 +73,7 @@ button.mb.sm{padding:8px 12px;font-size:11px;margin:3px;letter-spacing:.05em}
     <div class="lbl">STAMINA</div><div class="bar"><i id="bStam" style="background:#6a8a6a"></i></div>
   </div>
   <div class="hb" id="btnMute">♪</div>
+  <div class="hb" id="btnPause">II</div>
   <div id="mapwrap"><canvas id="map" width="180" height="180"></canvas></div>
   <div id="msg"></div><div id="prompt"></div>
   <div id="joy"><div id="knob"></div></div>
@@ -75,6 +81,7 @@ button.mb.sm{padding:8px 12px;font-size:11px;margin:3px;letter-spacing:.05em}
   <div class="hb" id="btnSprint">SPRINT</div>
   <div class="hb" id="btnScan">SCAN</div>
   <div class="hb" id="btnUse">USE</div>
+  <div id="bigmap"><canvas id="bigc" width="520" height="520"></canvas><div id="bigcap">Tap anywhere to close the map</div></div>
 </div>
 
 <div id="menu"><div id="menuIn">
@@ -107,12 +114,19 @@ button.mb.sm{padding:8px 12px;font-size:11px;margin:3px;letter-spacing:.05em}
   <div class="set">
     <button class="mb sm" id="bMusic"></button><button class="mb sm" id="bSfx"></button>
   </div>
-  <p class="tip">Left thumb: move · Right thumb: look · Hold SPRINT to run (drains stamina, and it's loud) · LIGHT toggles the flashlight · USE picks up fuses, places them in the glowing socket, and hides you in lockers.<br>Once every fuse is placed the monsters always know where you are and the exit lights up. Lockers still keep you safe.<br>The radar (top-right) shows hunting monsters, even behind you, and your friends. Find the cyan Fuse Scanner to outline every fuse.<br>Desktop: WASD, drag to look, Shift sprint, F light, E use, Q scan.</p>
+  <p class="tip">Left thumb: move · Right thumb: look · Hold SPRINT to run (drains stamina, and it's loud) · LIGHT toggles the flashlight · USE picks up fuses, places them in the glowing socket, and hides you in lockers · Tap the radar to open the big map · II pauses.<br>Once every fuse is placed the monsters always know where you are and the exit lights up. Lockers still keep you safe.<br>Find the cyan Fuse Scanner to outline every fuse.<br>Desktop: WASD, drag to look, Shift sprint, F light, E use, Q scan, M map, Esc pause.</p>
 </div></div>
 
 <div id="end">
   <h1 id="endT"></h1><p class="sub" id="endS"></p>
   <div><button class="mb" id="bRetry">TRY AGAIN</button><button class="mb" id="bMenu">BACK TO MENU</button></div>
+</div>
+
+<div id="pause">
+  <h1 style="font-size:34px">PAUSED</h1><p class="sub" id="pauseNote"></p>
+  <div><button class="mb" id="pResume">RESUME</button></div>
+  <div><button class="mb sm" id="pMusic"></button><button class="mb sm" id="pSfx"></button></div>
+  <div style="margin-top:10px"><button class="mb" id="pLeave">LEAVE GAME</button></div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -126,8 +140,8 @@ const SET=Object.assign({music:true,sfx:true},(()=>{try{return JSON.parse(localS
 const saveSet=()=>{try{localStorage.setItem('hh_set',JSON.stringify(SET))}catch(e){}};
 
 /* ---- lighting: ONE shared flashlight look for every player and every device ---- */
-const FL_POWER=2.1;     // flashlight brightness
-const AMBIENT=.32;      // how much you can see without the flashlight
+const FL_POWER=2.2;     // flashlight brightness
+const AMBIENT=.06;      // how much you can see without the flashlight (lower = darker)
 /* ---- world tuning ---- */
 const T=4, WALL_H=3, EYE=1.6;
 let N=12, GW=25, NEED=5, N_BATT=8, N_LOCK=14;   // these grow with the number of players (see genMaze)
@@ -150,7 +164,7 @@ const vib=p=>{try{navigator.vibrate&&navigator.vibrate(p)}catch(e){}};
 let state='menu', role='solo', scene=null, camera=null, renderer=null, clock=null, looping=false, time=0, nPlayers=1;
 let grid, rng, exitP, closeness=0, nearD=99, hb=0, ambT=10, growlT=0, breathT=0, dyT=0, killer=0, lastPrompt='', hidYaw=0, hidFl=true, mapTick=0, tension=0;
 let hasScan=false, scanUsed=false, scanLeft=0, frameMat=null, skMat=null, exMat=null, layoutOpen=[];
-let endgame=false, carry=-1, lastObj='';
+let endgame=false, carry=-1, lastObj='', paused=false, bigMap=false;
 const fuses=[], sockets=[], batts=[], lockers=[], mons=[], peers=new Map();
 let exitBeam=null, exitRing=null;
 const pu={x:0,z:0,got:false,mesh:null};
@@ -158,7 +172,7 @@ const me={id:0,x:0,z:0,yaw:0,pitch:0,hid:-1,saw:false,sawBy:-1,risk:0};
 let fuseCount=0, flOn=true, batt=100, stam=100, exhausted=false, stepAcc=0, bobT=0, noiseR=0;
 const net={pc:null,dc:null,t:0,bt:false,n2l:{},l2n:{}};
 const inp={mx:0,mz:0,keys:{},sprint:false};
-const mapC=$('map'), mx=mapC.getContext('2d');
+const mapC=$('map'), mx=mapC.getContext('2d'), bigC=$('bigc'), bx=bigC.getContext('2d');
 
 function mulberry(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
 
@@ -191,6 +205,7 @@ function bfsDist(sx,sz){
 /* Path from tile (sx,sz) to tile (tx,tz). The list does NOT include the start tile (so a walker
    never turns back to its own tile centre). If (fx,fz) is given, the last waypoint is that exact spot. */
 function bfsPath(sx,sz,tx,tz,fx,fz){
+  if(!grid[sz]||!grid[tz])return [];
   const prev=Array.from({length:GW},()=>Array(GW).fill(null)); prev[sz][sx]=[sx,sz]; const q=[[sx,sz]];
   for(let i=0;i<q.length;i++){const [x,z]=q[i];if(x===tx&&z===tz)break;
     for(const [dx,dz] of D4){const a=x+dx,b=z+dz;if(grid[b]&&grid[b][a]===0&&!prev[b][a]){prev[b][a]=[x,z];q.push([a,b])}}}
@@ -307,21 +322,87 @@ function mkLocker(vt){
   const dot=new THREE.Mesh(new THREE.SphereGeometry(.035,6,6),new THREE.MeshBasicMaterial({color:0x33cc77}));dot.position.set(0,2.05,.47);
   g.add(body,front,dot);return g;
 }
+
+/* ---------- the monsters: full creatures built from parts, with a run cycle ---------- */
+const SKIN=[0x9b978b,0x8e8aa8,0x8aa08f], DARKC=[0x1c1c1f,0x181530,0x13261b];
+function limb(len,r0,r1,mat){const g=new THREE.CylinderGeometry(r0,r1,len,7);g.translate(0,-len/2,0);return new THREE.Mesh(g,mat)}
 function mkMonster(i){
-  const g=new THREE.Group();
-  const dark=mkMat({color:[0x0c0c0e,0x0a0a14,0x0a120c][i%3]});
-  const body=new THREE.Mesh(new THREE.CylinderGeometry(.2,.36,1.7,8),dark);body.position.y=1.15;
-  const head=new THREE.Mesh(new THREE.SphereGeometry(.24,10,8),mkMat({color:[0x8d8678,0x7d8696,0x7f9684][i%3]}));
-  head.position.y=2.2;head.scale.set(.8,1.3,.8);
-  const eyeM=new THREE.MeshBasicMaterial({color:MCOL[i%3],fog:false});
-  const e1=new THREE.Mesh(new THREE.SphereGeometry(.045,6,6),eyeM),e2=e1.clone();
-  e1.position.set(-.08,2.26,.17);e2.position.set(.08,2.26,.17);
-  const armG=new THREE.CylinderGeometry(.04,.05,1.7,6),a1=new THREE.Mesh(armG,dark),a2=new THREE.Mesh(armG,dark);
-  a1.position.set(-.4,1.2,.1);a2.position.set(.4,1.2,.1);a1.rotation.z=.12;a2.rotation.z=-.12;
-  g.add(body,head,e1,e2,a1,a2);g.userData.arms=[a1,a2];g.userData.body=body;
-  if(i)g.scale.set(1.06,1.06,1.06);
-  return g;
+  const v=i%3,root=new THREE.Group();
+  const skin=mkMat({color:SKIN[v]}),dark=mkMat({color:DARKC[v]}),bone=mkMat({color:0xd8d2bd});
+  const cloth=mkMat({color:DARKC[v]});cloth.side=THREE.DoubleSide;
+  const eyeMat=new THREE.MeshBasicMaterial({color:MCOL[v],fog:false});
+  const legs=new THREE.Group();legs.position.y=1.08;
+  const body=new THREE.Group();body.position.y=1.08;
+  root.add(legs,body);
+  // legs (thigh -> knee -> shin -> clawed foot)
+  const mkLeg=sx=>{
+    const hip=new THREE.Group();hip.position.set(sx*.15,0,0);
+    hip.add(limb(.55,.09,.065,skin));
+    const knee=new THREE.Group();knee.position.y=-.55;hip.add(knee);
+    knee.add(limb(.55,.06,.04,skin));
+    const foot=new THREE.Mesh(new THREE.BoxGeometry(.11,.05,.24),dark);foot.position.set(0,-.55,.07);knee.add(foot);
+    for(const dx of [-.03,0,.03]){const c=new THREE.Mesh(new THREE.ConeGeometry(.012,.1,5),bone);c.rotation.x=Math.PI/2;c.position.set(dx,-.55,.21);knee.add(c)}
+    legs.add(hip);return {hip,knee};
+  };
+  const legL=mkLeg(-1),legR=mkLeg(1);
+  // pelvis, hunched ribcage, spine ridge, shoulder girdle
+  body.add(new THREE.Mesh(new THREE.BoxGeometry(.44,.26,.26),dark));
+  const torso=new THREE.Mesh(new THREE.CylinderGeometry(.27,.17,.9,8),skin);torso.position.y=.6;torso.scale.z=.62;body.add(torso);
+  for(let k=0;k<4;k++){const rb=new THREE.Mesh(new THREE.BoxGeometry(.36-k*.02,.022,.03),dark);rb.position.set(0,.42+k*.12,.15);body.add(rb)}
+  for(let k=0;k<6;k++){const sp=new THREE.Mesh(new THREE.ConeGeometry(.035,.13+(v===1?.1:0),5),bone);sp.rotation.x=-Math.PI/2;sp.position.set(0,.25+k*.14,-.15);body.add(sp)}
+  const girdle=new THREE.Mesh(new THREE.BoxGeometry(.64,.1,.2),dark);girdle.position.y=1.02;body.add(girdle);
+  const neck=new THREE.Mesh(new THREE.CylinderGeometry(.07,.1,.32,6),skin);neck.position.set(0,1.2,.08);neck.rotation.x=.45;body.add(neck);
+  // head: elongated skull, glowing eyes, hinged jaw full of teeth
+  const head=new THREE.Group();head.position.set(0,1.4,.2);body.add(head);
+  const skull=new THREE.Mesh(new THREE.SphereGeometry(.19,12,10),skin);skull.scale.set(.82,1,1.45);skull.position.z=.08;head.add(skull);
+  const e1=new THREE.Mesh(new THREE.SphereGeometry(.04,8,6),eyeMat),e2=e1.clone();e1.position.set(-.085,.06,.25);e2.position.set(.085,.06,.25);head.add(e1,e2);
+  const eg=new THREE.Sprite(new THREE.SpriteMaterial({map:glowTex(),color:MCOL[v],blending:THREE.AdditiveBlending,depthWrite:false,transparent:true,fog:false}));
+  eg.scale.set(.5,.5,1);eg.position.set(0,.06,.28);head.add(eg);
+  for(let k=0;k<5;k++){const t=new THREE.Mesh(new THREE.ConeGeometry(.014,.065,4),bone);t.rotation.x=Math.PI;t.position.set((k-2)*.032,-.09,.2+Math.abs(k-2)*.0);head.add(t)}
+  const jaw=new THREE.Group();jaw.position.set(0,-.075,.04);head.add(jaw);
+  const jm=new THREE.Mesh(new THREE.BoxGeometry(.17,.05,.32),dark);jm.position.set(0,-.02,.17);jaw.add(jm);
+  for(let k=0;k<5;k++){const t=new THREE.Mesh(new THREE.ConeGeometry(.014,.06,4),bone);t.position.set((k-2)*.032,.03,.26);jaw.add(t)}
+  if(v===2){for(const sx of [-1,1]){const h=new THREE.Mesh(new THREE.ConeGeometry(.04,.3,6),bone);h.position.set(sx*.1,.2,0);h.rotation.z=-sx*.4;head.add(h)}}
+  if(v===1){for(const sx of [-1,1]){const s=new THREE.Mesh(new THREE.ConeGeometry(.05,.3,5),bone);s.position.set(sx*.4,1.12,0);s.rotation.z=-sx*1.1;body.add(s)}}
+  // long arms with elbows, hands and claws
+  const mkArm=sx=>{
+    const sh=new THREE.Group();sh.position.set(sx*.36,1.0,0);
+    sh.add(limb(.62,.065,.05,skin));
+    const el=new THREE.Group();el.position.y=-.62;sh.add(el);
+    el.add(limb(.72,.05,.035,skin));
+    const hand=new THREE.Mesh(new THREE.BoxGeometry(.07,.12,.05),dark);hand.position.y=-.78;el.add(hand);
+    for(let c=-1;c<=2;c++){const cl=new THREE.Mesh(new THREE.ConeGeometry(.012,.22,5),bone);cl.rotation.x=Math.PI;cl.position.set((c-.5)*.022,-.94,.01);el.add(cl)}
+    body.add(sh);return {sh,el};
+  };
+  const armL=mkArm(-1),armR=mkArm(1);
+  // tattered rags
+  const rags=[];
+  for(const [x,z] of [[-.13,.12],[0,.15],[.13,.12],[0,-.13]]){
+    const g=new THREE.PlaneGeometry(.13,.55);g.translate(0,-.27,0);const m=new THREE.Mesh(g,cloth);m.position.set(x,-.08,z);body.add(m);rags.push(m);
+  }
+  root.scale.setScalar([1,1.06,1.12][v]);
+  root.userData.rig={body,legs,head,jaw,legL,legR,armL,armR,eg,eyes:[e1,e2],rags};
+  return root;
 }
+function animMonster(mo,mv,dt){
+  const r=mo.mesh.userData.rig,h=mo.mode==='hunt',dying=state==='dying'&&killer===mo.id;
+  const gait=clamp(mv/MONSTER_SPEED,0,1.15);
+  mo.ph+=dt*(2.2+mv*1.55);
+  const s=Math.sin(mo.ph),amp=.22+gait*.8;
+  r.legL.hip.rotation.x=s*amp;r.legR.hip.rotation.x=-s*amp;
+  r.legL.knee.rotation.x=.12+Math.max(0,-s)*amp*1.3;r.legR.knee.rotation.x=.12+Math.max(0,s)*amp*1.3;
+  r.armL.sh.rotation.x=-s*amp*.95-.15;r.armR.sh.rotation.x=s*amp*.95-.15;
+  r.armL.el.rotation.x=-.45-Math.max(0,s)*amp*.9;r.armR.el.rotation.x=-.45-Math.max(0,-s)*amp*.9;
+  const lean=h?.12+.5*gait:.2+Math.sin(time*1.3+mo.id)*.04;           // hunched creep when roaming, full forward lunge when chasing
+  r.body.rotation.x+=(lean-r.body.rotation.x)*Math.min(1,dt*6);
+  r.body.position.y=1.08+Math.abs(s)*.07*amp-(h?.04:0);
+  r.head.rotation.x=-r.body.rotation.x*.85+Math.sin(time*2.1+mo.id)*.05;
+  r.head.rotation.y=h?Math.sin(time*9+mo.id)*.05:Math.sin(time*.8+mo.id*2)*.45;   // looks around while roaming
+  r.jaw.rotation.x=dying?.85:(h?.4+Math.sin(time*20+mo.id)*.13:.1+Math.sin(time*2)*.03);
+  const pulse=.5+.14*Math.sin(time*8+mo.id)+(h?.12:0);r.eg.scale.set(pulse,pulse,1);
+  r.rags.forEach((m,k)=>{m.rotation.x=.18+Math.sin(time*3+k)*.08+gait*.35});
+}
+
 function mkRemote(id){ // another player: coloured body + a small glowing lamp (when their flashlight is on) + a fuse over the head when carrying one
   const g=new THREE.Group();
   const body=new THREE.Mesh(new THREE.CylinderGeometry(.25,.28,1.3,8),mkMat({color:PCOL[id%4]}));body.position.y=.75;
@@ -371,7 +452,8 @@ function buildWorld(){
   const ct=makeTex('ceil');ct.repeat.set(GW,GW);
   const ceil=new THREE.Mesh(new THREE.PlaneGeometry(W,W),mkMat({map:ct}));
   ceil.rotation.x=Math.PI/2;ceil.position.set(W/2,WALL_H,W/2);scene.add(ceil);
-  const dmat=new THREE.MeshBasicMaterial({map:decalTex(),transparent:true,depthWrite:false});
+  // blood puddles: lit by the flashlight like everything else, so they no longer glow in the dark
+  const dmat=new THREE.MeshBasicMaterial({map:decalTex(),transparent:true,depthWrite:false});dmat.onBeforeCompile=hookFl;
   const open=[];for(let z=1;z<GW-1;z++)for(let x=1;x<GW-1;x++)if(grid[z][x]===0)open.push([x,z]);
   for(let i=0;i<Math.round(open.length/12);i++){
     const c=open[(Math.random()*open.length)|0],s=1+Math.random()*2.2,p=new THREE.Mesh(new THREE.PlaneGeometry(s,s),dmat);
@@ -415,8 +497,9 @@ function buildWorld(){
   exitBeam=beamMesh(exMat,20,.22);exitBeam.position.set(exitP.x,10,exitP.z);exitBeam.visible=false;exitBeam.renderOrder=20;scene.add(exitBeam);
   exitRing=new THREE.Mesh(new THREE.RingGeometry(1.3,1.8,28),exMat);exitRing.rotation.x=-Math.PI/2;exitRing.position.set(exitP.x,.06,exitP.z);exitRing.visible=false;exitRing.renderOrder=20;scene.add(exitRing);
   L.mc.forEach((c,i)=>{
-    const mo={id:i,x:tc(c[0]),z:tc(c[1]),ry:0,tx:0,tz:0,tr:0,mode:'patrol',path:[],repath:0,hunt:0,lk:null,arrived:false,d:99,px:0,pz:0,sa:0,grace:8+i*8,mesh:mkMonster(i)};
-    mo.tx=mo.px=mo.x;mo.tz=mo.pz=mo.z;scene.add(mo.mesh);mons.push(mo);
+    const x=tc(c[0]),z=tc(c[1]);
+    const mo={id:i,x,z,ry:0,tx:x,tz:z,tr:0,mode:'patrol',path:[],repath:0,hunt:0,lk:null,arrived:false,d:99,px:x,pz:z,sa:0,ph:Math.random()*6,wt:0,wx:x,wz:z,grace:8+i*8,mesh:mkMonster(i)};
+    scene.add(mo.mesh);mons.push(mo);
   });
   me.x=tc(1)+(me.id%2)*.9;me.z=tc(1)+(me.id>1?.9:0);me.yaw=grid[1][2]===0?-Math.PI/2:Math.PI;me.pitch=0;
 }
@@ -434,7 +517,7 @@ function resetRound(){
 /* ---------- audio: sound effects + generative music ---------- */
 let AC=null,master,sfxBus,musicBus,nbuf,delayIn,tenGain,musT=2,padT=0,chIdx=0,pulseT=0;
 function initAudio(){
-  if(AC){if(AC.state==='suspended')AC.resume();return}
+  if(AC){if(AC.state==='suspended'&&!(paused&&role==='solo'))AC.resume();return}
   try{AC=new (window.AudioContext||window.webkitAudioContext)()}catch(e){return}
   master=AC.createGain();master.gain.value=.85;master.connect(AC.destination);
   sfxBus=AC.createGain();sfxBus.gain.value=SET.sfx?1:0;sfxBus.connect(master);
@@ -518,8 +601,8 @@ const sfx={
 let msgT=0;
 function toast(t,ms){const m=$('msg');m.textContent=t;m.style.opacity=1;clearTimeout(msgT);msgT=setTimeout(()=>m.style.opacity=0,ms||2400)}
 function objText(){
-  if(endgame)return 'ALL FUSES PLACED\nThey know where you are. Reach the glowing EXIT!';
-  return `Fuses placed: ${fuseCount}/${NEED}\n`+(carry>=0?'Carrying a fuse: take it to the glowing socket':'Find the next fuse');
+  if(endgame)return 'ALL FUSES PLACED\nThey know where you are.\nReach the glowing EXIT!';
+  return `Fuses placed: ${fuseCount}/${NEED}\n`+(carry>=0?'Carrying a fuse:\ntake it to the glowing socket':'Find the next fuse');
 }
 const carryOf=id=>fuses.findIndex(f=>f.st===1&&f.by===id);
 function findTarget(){
@@ -532,8 +615,12 @@ function findTarget(){
   return best;
 }
 
-/* ---------- minimap / radar (rotates with your view: behind you = bottom) ---------- */
-function drawMap(){
+/* ---------- minimap / radar + big map ---------- */
+const ctxDot=(c,x,y,r,col)=>{c.fillStyle=col;c.beginPath();c.arc(x,y,r,0,6.2832);c.fill()};
+const ctxDiamond=(c,x,y,r,col)=>{c.fillStyle=col;c.beginPath();c.moveTo(x,y-r);c.lineTo(x+r*.9,y);c.lineTo(x,y+r);c.lineTo(x-r*.9,y);c.closePath();c.fill()};
+const ctxPulse=(c,x,y,col,k,sc)=>{c.strokeStyle=col;c.lineWidth=1.4;c.beginPath();c.arc(x,y,(5+((time*k)%1)*7)*(sc||1),0,6.2832);c.stroke()};
+const ctxArrow=(c,x,y,ang,r,col)=>{c.save();c.translate(x,y);c.rotate(ang);c.fillStyle=col;c.beginPath();c.moveTo(r*1.5,0);c.lineTo(-r,r*.95);c.lineTo(-r*.45,0);c.lineTo(-r,-r*.95);c.closePath();c.fill();c.restore()};
+function drawMap(){ // small radar: rotates with your view (behind you = bottom)
   if(!grid||!scene)return;
   const S=mapC.width,C=S/2,R=C-4,RANGE=34,s=R/RANGE,cs=Math.cos(me.yaw),sn=Math.sin(me.yaw);
   mx.clearRect(0,0,S,S);
@@ -549,35 +636,58 @@ function drawMap(){
   mx.restore();
   const pt=(wx,wz)=>{const dx=wx-me.x,dz=wz-me.z;let sx=(dx*cs-dz*sn)*s,sy=(dx*sn+dz*cs)*s,l=Math.hypot(sx,sy),c=false;
     if(l>R-6){sx*=(R-6)/l;sy*=(R-6)/l;c=true}return [C+sx,C+sy,c]};
-  const dot=(p,col,r)=>{mx.fillStyle=col;mx.beginPath();mx.arc(p[0],p[1],p[2]?r*.75:r,0,6.2832);mx.fill()};
-  const diamond=(p,col,r)=>{mx.fillStyle=col;mx.beginPath();mx.moveTo(p[0],p[1]-r);mx.lineTo(p[0]+r*.9,p[1]);mx.lineTo(p[0],p[1]+r);mx.lineTo(p[0]-r*.9,p[1]);mx.closePath();mx.fill()};
-  const pulse=(p,col,k)=>{mx.strokeStyle=col;mx.lineWidth=1.4;mx.beginPath();mx.arc(p[0],p[1],5+((time*k)%1)*7,0,6.2832);mx.stroke()};
-  const arrow=(p,ax,ay,col,r)=>{mx.save();mx.translate(p[0],p[1]);mx.rotate(Math.atan2(ay,ax));mx.fillStyle=col;mx.beginPath();
-    mx.moveTo(r*1.5,0);mx.lineTo(-r,r*.95);mx.lineTo(-r*.45,0);mx.lineTo(-r,-r*.95);mx.closePath();mx.fill();mx.restore()};
-  if(endgame&&exitP){const p=pt(exitP.x,exitP.z);diamond(p,'#5dff8a',7);pulse(p,'#5dff8a',1.5)}
-  // sockets that are waiting for a fuse (their fuse is being carried)
-  fuses.forEach((f,i)=>{if(f.st===1&&sockets[i]){const p=pt(sockets[i].x,sockets[i].z);diamond(p,'#40e0ff',6);pulse(p,'#40e0ff',1.6)}});
-  if(scanLeft>0){
-    for(const f of fuses){if(f.st!==0)continue;const p=pt(f.x,f.z);dot(p,'#ffa030',4);pulse(p,'#ffa030',2)}
-  }
+  const dot=(p,col,r)=>ctxDot(mx,p[0],p[1],p[2]?r*.75:r,col);
+  if(endgame&&exitP){const p=pt(exitP.x,exitP.z);ctxDiamond(mx,p[0],p[1],7,'#5dff8a');ctxPulse(mx,p[0],p[1],'#5dff8a',1.5)}
+  fuses.forEach((f,i)=>{if(f.st===1&&sockets[i]){const p=pt(sockets[i].x,sockets[i].z);ctxDiamond(mx,p[0],p[1],6,'#40e0ff');ctxPulse(mx,p[0],p[1],'#40e0ff',1.6)}});
+  if(scanLeft>0){for(const f of fuses){if(f.st!==0)continue;const p=pt(f.x,f.z);dot(p,'#ffa030',4);ctxPulse(mx,p[0],p[1],'#ffa030',2)}}
   for(const mo of mons){
     if(!(mo.mode==='hunt'||mo.d<22))continue;       // hunting monsters are always shown (pinned to the rim if far)
     const p=pt(mo.x,mo.z),col=MCSS[mo.id%3];
-    if(mo.mode==='hunt')pulse(p,col,3);
+    if(mo.mode==='hunt')ctxPulse(mx,p[0],p[1],col,3);
     dot(p,col,4.4);
   }
-  // other players: coloured arrow showing where they face, white ring + label; stays on the rim when far away
   peers.forEach(p=>{
     if(!p.active)return;
     const col=PCSS[p.id%4],pp=pt(p.x,p.z),fx=-Math.sin(p.yaw),fz=-Math.cos(p.yaw),ax=fx*cs-fz*sn,ay=fx*sn+fz*cs;
     mx.fillStyle='rgba(255,255,255,.18)';mx.beginPath();mx.arc(pp[0],pp[1],9,0,6.2832);mx.fill();
-    if(pp[2]||p.hid)dot(pp,col,5);else arrow(pp,ax,ay,col,5.5);
+    if(pp[2]||p.hid)dot(pp,col,5);else ctxArrow(mx,pp[0],pp[1],Math.atan2(ay,ax),5.5,col);
     mx.strokeStyle='#ffffff';mx.lineWidth=1.3;mx.beginPath();mx.arc(pp[0],pp[1],8,0,6.2832);mx.stroke();
     mx.fillStyle='#ffffff';mx.font='bold 10px monospace';mx.textAlign='center';mx.fillText('P'+(p.id+1)+(p.hid?' (hiding)':''),pp[0],pp[1]-11);
   });
   mx.fillStyle='#e8f0dc';mx.beginPath();mx.moveTo(C,C-6.5);mx.lineTo(C+4.8,C+5);mx.lineTo(C,C+2.5);mx.lineTo(C-4.8,C+5);mx.closePath();mx.fill();
   mx.strokeStyle='rgba(200,210,190,.55)';mx.lineWidth=2;mx.beginPath();mx.arc(C,C,R,0,6.2832);mx.stroke();
 }
+function drawBigMap(){ // the whole maze, north-up (tap the radar to open / close)
+  if(!grid||!scene)return;
+  const S=bigC.width,k=S/(GW*T),ts=T*k;
+  bx.clearRect(0,0,S,S);bx.fillStyle='#070a07';bx.fillRect(0,0,S,S);
+  bx.fillStyle='rgba(150,170,140,.42)';
+  for(let j=0;j<GW;j++)for(let i=0;i<GW;i++)if(grid[j][i]===0)bx.fillRect(i*ts,j*ts,ts+.6,ts+.6);
+  bx.fillStyle='#3fdc86';lockers.forEach(l=>bx.fillRect(l.x*k-2.5,l.z*k-2.5,5,5));
+  sockets.forEach((s,i)=>{
+    const f=fuses[i];if(!f)return;const x=s.x*k,y=s.z*k;
+    if(f.st===1){ctxDiamond(bx,x,y,8,'#40e0ff');ctxPulse(bx,x,y,'#40e0ff',1.6,1.6)}
+    else if(f.st===2){bx.fillStyle='#44ff88';bx.fillRect(x-3,y-3,6,6)}
+  });
+  if(scanLeft>0)fuses.forEach(f=>{if(f.st===0){ctxDot(bx,f.x*k,f.z*k,5,'#ffa030');ctxPulse(bx,f.x*k,f.z*k,'#ffa030',2,1.4)}});
+  if(endgame&&exitP){const x=exitP.x*k,y=exitP.z*k;ctxDiamond(bx,x,y,10,'#5dff8a');ctxPulse(bx,x,y,'#5dff8a',1.5,2)}
+  mons.forEach(mo=>{
+    if(!(mo.mode==='hunt'||mo.d<22))return;
+    const x=mo.x*k,y=mo.z*k,col=MCSS[mo.id%3];
+    if(mo.mode==='hunt')ctxPulse(bx,x,y,col,3,1.5);
+    ctxDot(bx,x,y,6,col);
+  });
+  peers.forEach(p=>{
+    if(!p.active)return;
+    const x=p.x*k,y=p.z*k,col=PCSS[p.id%4];
+    ctxArrow(bx,x,y,Math.atan2(-Math.cos(p.yaw),-Math.sin(p.yaw)),7,col);
+    bx.strokeStyle='#fff';bx.lineWidth=1.3;bx.beginPath();bx.arc(x,y,10,0,6.2832);bx.stroke();
+    bx.fillStyle='#fff';bx.font='bold 12px monospace';bx.textAlign='center';bx.fillText('P'+(p.id+1)+(p.hid?' (hiding)':''),x,y-14);
+  });
+  ctxArrow(bx,me.x*k,me.z*k,Math.atan2(-Math.cos(me.yaw),-Math.sin(me.yaw)),8,'#ffffff');
+  bx.strokeStyle='rgba(200,210,190,.5)';bx.lineWidth=2;bx.strokeRect(0,0,S,S);
+}
+function setBig(v){bigMap=v;$('bigmap').style.display=v?'flex':'none';if(v)drawBigMap()}
 
 /* ---------- fuses, sockets and the final phase ---------- */
 const recount=()=>{fuseCount=fuses.reduce((a,f)=>a+(f.st===2?1:0),0)};
@@ -698,12 +808,20 @@ function searchCell(lt){ // a random open tile near where the monster last sense
   const c=layoutOpen.filter(o=>Math.abs(o[0]-lt[0])+Math.abs(o[1]-lt[1])<=7);
   return c.length?c[(Math.random()*c.length)|0]:lt;
 }
+function unstick(mo){ // safety net: never let a monster sit inside a wall or at a broken position
+  if(!isFinite(mo.x)||!isFinite(mo.z)){mo.x=tc(1);mo.z=tc(1);mo.path=[]}
+  if(wallAt(mo.x,mo.z)){
+    const ti=Math.floor(mo.x/T),tj=Math.floor(mo.z/T);let best=null,bd=1e9;
+    for(let dj=-2;dj<=2;dj++)for(let di=-2;di<=2;di++){const a=ti+di,b=tj+dj;if(grid[b]&&grid[b][a]===0){const d=di*di+dj*dj;if(d<bd){bd=d;best=[a,b]}}}
+    if(best){mo.x=tc(best[0]);mo.z=tc(best[1]);mo.path=[]}
+  }
+}
 function monsterAI(dt){
   if(state!=='play')return;
   const ps=[{x:me.x,z:me.z,fl:flOn,noise:noiseR,hid:me.hid>=0,ref:me}];
   peers.forEach(p=>{if(p.active)ps.push({x:p.x,z:p.z,fl:p.fl,noise:p.v>(WALK+SPRINT)/2?HEAR_SPRINT:p.v>1?HEAR_WALK:0,hid:p.hid>0,ref:p})});
   for(let k=0;k<mons.length;k++){
-    const mo=mons[k];mo.grace-=dt;
+    const mo=mons[k];mo.grace-=dt;unstick(mo);
     let best=null,bd=1e9;
     for(const p of ps){if(p.hid)continue;const d=Math.hypot(p.x-mo.x,p.z-mo.z);if(d<bd){bd=d;best=p}}   // hidden players can't be targeted
     let seen=false,heard=false;
@@ -730,7 +848,7 @@ function monsterAI(dt){
           if(!mo.path.length){const sc=searchCell(lt);mo.path=bfsPath(mt[0],mt[1],sc[0],sc[1])}
         }else{
           mo.path=bfsPath(mt[0],mt[1],lt[0],lt[1],mo.lk.x,mo.lk.z);
-          if(Math.hypot(mo.lk.x-mo.x,mo.lk.z-mo.z)<1.5)mo.arrived=true;
+          if(!mo.path.length||Math.hypot(mo.lk.x-mo.x,mo.lk.z-mo.z)<1.5)mo.arrived=true;   // nowhere left to go there: start searching instead of standing still
         }
       }
     }else if(!mo.path.length){                                                  // roaming
@@ -741,6 +859,18 @@ function monsterAI(dt){
       const w=mo.path[0],dx=w.x-mo.x,dz=w.z-mo.z,d=Math.hypot(dx,dz),st=spd*dt;
       if(d<=st){mo.x=w.x;mo.z=w.z;mo.path.shift()}else{mo.x+=dx/d*st;mo.z+=dz/d*st}
       if(d>.01)mo.ry=Math.atan2(dx,dz);
+    }
+    // stuck detector: no real progress for ~1.2s (and not deliberately waiting at a locker) -> pick a fresh route
+    mo.wt+=dt;
+    if(mo.wt>=1.2){
+      const moved=Math.hypot(mo.x-mo.wx,mo.z-mo.wz),waiting=ps.some(p=>p.hid&&p.ref.saw&&p.ref.sawBy===k);
+      if(moved<.4&&!waiting){
+        if(!endgame)mo.mode='patrol';
+        mo.hunt=0;mo.arrived=false;mo.repath=0;
+        const c=layoutOpen[(Math.random()*layoutOpen.length)|0];
+        mo.path=bfsPath(Math.floor(mo.x/T),Math.floor(mo.z/T),c[0],c[1]);
+      }
+      mo.wx=mo.x;mo.wz=mo.z;mo.wt=0;
     }
     for(const p of ps)if(!p.hid&&Math.hypot(p.x-mo.x,p.z-mo.z)<CATCH){die(k);return}   // a hidden player can never be caught in the final phase
   }
@@ -764,7 +894,7 @@ function monsterFollow(dt){
   for(const mo of mons){mo.x+=(mo.tx-mo.x)*k;mo.z+=(mo.tz-mo.z)*k;mo.ry+=Math.atan2(Math.sin(mo.tr-mo.ry),Math.cos(mo.tr-mo.ry))*k}
 }
 
-/* ---------- end states / rounds ---------- */
+/* ---------- end states / rounds / pause ---------- */
 function die(k){
   if(state!=='play')return;state='dying';dyT=0;killer=k||0;if(role==='host')send({t:'dead',k:killer});sfx.scream();vib([200,80,300]);
 }
@@ -774,17 +904,30 @@ function dyingTick(dt){
   if(dyT>1.7)showEnd(false,me.hid>=0?'It opened the locker.':(endgame?'So close to the exit.':'You should have kept moving.'));
 }
 function showEnd(win,msg){
-  state='over';tension=0;
+  state='over';tension=0;setBig(false);setPause(false);
   $('endT').textContent=win?'YOU ESCAPED':'IT FOUND YOU';$('endS').textContent=msg;
   const canRetry=role==='solo'||linked();
   $('bRetry').style.display=canRetry?'inline-block':'none';
   $('bRetry').textContent=role==='guest'?'TRY AGAIN (ASK HOST)':'TRY AGAIN';
   $('end').style.display='flex';$('hud').style.display='none';$('slats').style.display='none';$('flash').style.opacity=win?0:.5;
 }
+function setPause(v){
+  if(v&&state!=='play'&&state!=='dying')return;
+  paused=v;$('pause').style.display=v?'flex':'none';
+  $('pauseNote').textContent=role==='solo'?'The game is paused.':'The game keeps running for your friends while this menu is open. Hide in a locker or leave if you need a break.';
+  if(AC){if(v&&role==='solo')AC.suspend();else AC.resume()}
+  if(v){inp.mx=inp.mz=0;inp.sprint=false;spBtn.classList.remove('on');setBig(false)}
+}
+function leaveGame(){ // close every connection, then go back to the title screen
+  try{const p=BT();if(p)p.close()}catch(e){}
+  try{if(net.pc)net.pc.close()}catch(e){}
+  location.reload();
+}
 function beginRound(seed,r,id,n){
   role=r;me.id=id||0;nPlayers=n||1;
   initAudio();resetRound();genMaze(seed);buildWorld();
   layoutOpen=[];for(let z=1;z<GW-1;z++)for(let x=1;x<GW-1;x++)if(grid[z][x]===0)layoutOpen.push([x,z]);
+  paused=false;setBig(false);$('pause').style.display='none';
   $('menu').style.display='none';$('end').style.display='none';$('hud').style.display='block';
   state='play';
   toast(r==='solo'?'Find the fuses and carry each to its glowing socket.':`You are P${me.id+1}. The halls are bigger with more of you. Stay close.`,3800);
@@ -995,8 +1138,7 @@ function animateWorld(dt){
   for(const mo of mons){
     const mv=Math.hypot(mo.x-mo.px,mo.z-mo.pz)/Math.max(dt,.001);mo.px=mo.x;mo.pz=mo.z;
     mo.mesh.position.set(mo.x,0,mo.z);mo.mesh.rotation.y=mo.ry;
-    const sw=Math.sin(time*(mv>2?9:3)+mo.id);
-    mo.mesh.userData.arms[0].rotation.x=sw*.5;mo.mesh.userData.arms[1].rotation.x=-sw*.5;mo.mesh.userData.body.rotation.z=sw*.03;
+    animMonster(mo,mv,dt);
     mo.sa+=mv*dt;if(mo.sa>3.2){mo.sa=0;const v=.5*clamp(1-mo.d/26,0,1);noise(.12,v,110,.7);tone(70,40,.1,v*.6)}
   }
   peers.forEach(p=>{
@@ -1026,7 +1168,7 @@ function hud(){
   const txt=t?(t.k==='f'?'Take the fuse':t.k==='s'?'Place the fuse':t.k==='h'?(me.hid>=0?'Leave the locker':'Hide in the locker'):t.k==='x'?(endgame?'Open the gate':`Gate locked — place all fuses (${fuseCount}/${NEED})`):''):'';
   if(txt!==lastPrompt){lastPrompt=txt;$('prompt').textContent=txt;$('btnUse').classList.toggle('ready',!!t)}
   $('flash').style.opacity=state==='dying'?.5+Math.random()*.4:closeness*closeness*.5;
-  if((mapTick++&1)===0)drawMap();
+  if((mapTick++&1)===0){drawMap();if(bigMap)drawBigMap()}
 }
 function update(dt){
   time+=dt;
@@ -1054,7 +1196,7 @@ function loop(){
   requestAnimationFrame(loop);
   if(!renderer||!scene)return;
   const dt=Math.min(.05,clock.getDelta());
-  if(state==='play'||state==='dying')update(dt);
+  if((state==='play'||state==='dying')&&!(paused&&role==='solo'))update(dt);   // solo pause freezes the game; in co-op it keeps running
   renderer.render(scene,camera);
 }
 addEventListener('resize',()=>{if(!renderer)return;renderer.setSize(innerWidth,innerHeight);if(camera){camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix()}});
@@ -1088,26 +1230,39 @@ const rel=e=>{
 layer.addEventListener('pointerup',rel);layer.addEventListener('pointercancel',rel);
 const press=(id,fn)=>$(id).addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();initAudio();fn()});
 press('btnUse',doUse);press('btnLight',toggleLight);press('btnScan',useScan);
+press('btnPause',()=>setPause(true));
+press('mapwrap',()=>setBig(!bigMap));
+$('bigmap').addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();setBig(false)});
 // hold-to-sprint button
 const spBtn=$('btnSprint');
 spBtn.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();initAudio();inp.sprint=true;spBtn.classList.add('on');try{spBtn.setPointerCapture(e.pointerId)}catch(x){}});
 const spUp=()=>{inp.sprint=false;spBtn.classList.remove('on')};
 spBtn.addEventListener('pointerup',spUp);spBtn.addEventListener('pointercancel',spUp);spBtn.addEventListener('lostpointercapture',spUp);
-addEventListener('keydown',e=>{const k=e.key.toLowerCase();inp.keys[k]=true;if(e.shiftKey)inp.keys.shift=true;if(!e.repeat){if(k==='f')toggleLight();if(k==='e')doUse();if(k==='q')useScan()}});
+addEventListener('keydown',e=>{
+  const k=e.key.toLowerCase();inp.keys[k]=true;if(e.shiftKey)inp.keys.shift=true;
+  if(!e.repeat){
+    if(k==='escape'||k==='p')setPause(!paused);
+    else if(k==='m')setBig(!bigMap);
+    else if(!paused){if(k==='f')toggleLight();if(k==='e')doUse();if(k==='q')useScan()}
+  }
+});
 addEventListener('keyup',e=>{inp.keys[e.key.toLowerCase()]=false;if(!e.shiftKey)inp.keys.shift=false});
 document.addEventListener('contextmenu',e=>e.preventDefault());
-document.addEventListener('pointerdown',e=>{initAudio();if(e.target.closest&&e.target.closest('#menu button, #end button'))sfx.ui()},true);
+document.addEventListener('pointerdown',e=>{initAudio();if(e.target.closest&&e.target.closest('#menu button, #end button, #pause button'))sfx.ui()},true);
 
 /* ---------- menu wiring ---------- */
 function syncMenuBtns(){
-  $('bMusic').textContent='MUSIC: '+(SET.music?'ON':'OFF');
-  $('bSfx').textContent='SOUND FX: '+(SET.sfx?'ON':'OFF');
+  const m='MUSIC: '+(SET.music?'ON':'OFF'),s='SOUND FX: '+(SET.sfx?'ON':'OFF');
+  $('bMusic').textContent=m;$('pMusic').textContent=m;$('bSfx').textContent=s;$('pSfx').textContent=s;
   $('btnMute').textContent=SET.music?'♪':'×';
 }
 function toggleMusic(){SET.music=!SET.music;saveSet();if(musicBus)musicBus.gain.setTargetAtTime(SET.music?.55:0,AC.currentTime,.1);syncMenuBtns()}
-$('bMusic').onclick=toggleMusic;press('btnMute',toggleMusic);
-$('bSfx').onclick=()=>{SET.sfx=!SET.sfx;saveSet();if(sfxBus)sfxBus.gain.setTargetAtTime(SET.sfx?1:0,AC.currentTime,.05);syncMenuBtns()};
+function toggleSfx(){SET.sfx=!SET.sfx;saveSet();if(sfxBus)sfxBus.gain.setTargetAtTime(SET.sfx?1:0,AC.currentTime,.05);syncMenuBtns()}
+$('bMusic').onclick=toggleMusic;$('pMusic').onclick=toggleMusic;press('btnMute',toggleMusic);
+$('bSfx').onclick=toggleSfx;$('pSfx').onclick=toggleSfx;
 syncMenuBtns();
+$('pResume').onclick=()=>setPause(false);
+$('pLeave').onclick=leaveGame;
 
 $('bSolo').onclick=()=>{initAudio();net.bt=false;beginRound((Math.random()*1e9)|0,'solo',0,1)};
 $('bCoop').onclick=()=>{$('coop').style.display='block'};
@@ -1129,7 +1284,7 @@ $('bRetry').onclick=()=>{
   if(role==='guest'){send({t:'retry'});$('endS').textContent='Asked the host to restart...'}
   else hostRestart();
 };
-$('bMenu').onclick=()=>location.reload();
+$('bMenu').onclick=leaveGame;
 })();
 </script>
 </body>
