@@ -607,6 +607,7 @@ function resetRound(){
   hasScan=false;scanUsed=false;scanLeft=0;closeness=0;nearD=99;hb=0;dyT=0;killer=0;lastPrompt='';hidFl=true;tension=0;
   endgame=false;carry=-1;lastObj='';
   hideAnim=null;animY=null;
+deathReset();
   pu.got=false;net.t=0;
   $('btnScan').style.display='none';$('btnLight').classList.add('on');$('slats').style.display='none';$('prompt').textContent='';
 }
@@ -1059,12 +1060,139 @@ function die(k){
   if(state!=='play')return;state='dying';dyT=0;killer=k||0;
   hideAnim=null;animY=null;
   if(me.hid>=0&&lockers[me.hid]){lockers[me.hid].snap=1;sfx.door()}   // the monster rips the locker door open
-  if(role==='host')send({t:'dead',k:killer});sfx.scream();vib([200,80,300]);
+  deathStart(killer);                                                  // starts the grab-and-eat animation
+  if(role==='host')send({t:'dead',k:killer});
+  if(!death){sfx.scream();vib([200,80,300])}                           // short version if someone else was caught
 }
 function dyingTick(dt){
-  dyT+=dt;const mo=mons[killer]||mons[0],dx=mo.x-me.x,dz=mo.z-me.z,ty=Math.atan2(-dx,-dz);
-  me.yaw+=Math.atan2(Math.sin(ty-me.yaw),Math.cos(ty-me.yaw))*Math.min(1,dt*10);me.pitch+=(.15-me.pitch)*Math.min(1,dt*6);
-  if(dyT>1.7)showEnd(false,me.hid>=0?'It opened the locker.':(endgame?'So close to the exit.':'You should have kept moving.'));
+  const D=death;
+  if(!D){ // short version (the monster caught someone else): turn to face it
+    dyT+=dt;deathFlash=.5+Math.random()*.4;
+    const mo=mons[killer]||mons[0],dx=mo.x-me.x,dz=mo.z-me.z,ty=Math.atan2(-dx,-dz);
+    me.yaw+=Math.atan2(Math.sin(ty-me.yaw),Math.cos(ty-me.yaw))*Math.min(1,dt*10);me.pitch+=(.15-me.pitch)*Math.min(1,dt*6);
+    if(dyT>1.7)showEnd(false,me.hid>=0?'It opened the locker.':(endgame?'So close to the exit.':'You should have kept moving.'));
+    return;
+  }
+  D.t+=dt;const t=D.t,mo=D.mo,r=mo.mesh.userData.rig;
+  while(D.ev<DEATH_EV.length&&t>=DEATH_EV[D.ev][0]){DEATH_EV[D.ev][1]();D.ev++}
+  deathFlash=0;
+  // 1. the monster lunges in, faces you and strikes its pose
+  const a=ease(t/.7);
+  mo.mesh.position.set(dMix(D.mx0,D.Mx,a),0,dMix(D.mz0,D.Mz,a));
+  mo.mesh.rotation.y=D.ry0+angDiff(D.ry0,D.ryT)*ease(t/.5);
+  poseKiller(r,t);
+  mo.mesh.updateMatrixWorld(true);
+  // 2. its claws hold you: the body is shifted so the hands stay exactly where you are
+  r.armL.el.localToWorld(_v1.set(0,-.8,0));r.armR.el.localToWorld(_v2.set(0,-.8,0));
+  const hx=(_v1.x+_v2.x)/2,hy=(_v1.y+_v2.y)/2,hz=(_v1.z+_v2.z)/2;
+  const pull=kf(t,[[0,0],[1.5,0],[2.8,D.pull],[4.2,D.pull]]);
+  const wH=ease((t-.8)/.5),wy=ease((t-.9)/.5);
+  mo.mesh.position.x+=(D.px+D.ux*pull-hx)*wH;mo.mesh.position.z+=(D.pz+D.uz*pull-hz)*wH;
+  mo.mesh.updateMatrixWorld(true);
+  // 3. camera: first held by the claws, then pulled into the mouth
+  const cx=D.px+D.ux*(pull-.1*wH),cz=D.pz+D.uz*(pull-.1*wH);
+  const cy=dMix(D.y0-.18*Math.sin(Math.min(t/.7,1)*Math.PI),hy+.3,wy);
+  r.head.localToWorld(_v3.set(0,-.17,.2));                                   // centre of the mouth
+  const mxw=_v3.x,myw=_v3.y,mzw=_v3.z;
+  r.head.localToWorld(_v1.set(0,0,0));r.head.localToWorld(_v2.set(0,0,1));
+  let Fx=_v2.x-_v1.x,Fy=_v2.y-_v1.y,Fz=_v2.z-_v1.z;const Fl=Math.hypot(Fx,Fy,Fz)||1;Fx/=Fl;Fy/=Fl;Fz/=Fl;
+  const wl=ease(t/.45),bump=kf(t,[[0,0],[.85,0],[1.05,1],[1.5,1],[2.1,0]]);
+  const lh=Math.hypot(mxw-cx,mzw-cz)||1;
+  const yawH=D.yaw0+angDiff(D.yaw0,D.yawT)*wl;
+  const pitchH=dMix(D.pitch0,Math.atan2(myw-cy,lh),wl)-.3*bump;
+  const ww=ease((t-3)/.8),dEnd=ease((t-3.95)/.6);
+  const dh=Math.hypot(mxw-cx,myw-cy,mzw-cz),dd=dMix(dh,.04,dEnd);
+  const qx=mxw+Fx*dd,qy=myw+Fy*dd,qz=mzw+Fz*dd;                               // in front of the mouth, closing in
+  const yawE=Math.atan2(Fx,Fz),pitchE=Math.asin(clamp(-Fy,-1,1));
+  const sh=kf(t,K_SHAKE),rn=()=>Math.random()-.5;
+  me.x=dMix(cx,qx,ww)+rn()*sh;me.z=dMix(cz,qz,ww)+rn()*sh;animY=dMix(cy,qy,ww)+rn()*sh;
+  me.yaw=yawH+angDiff(yawH,yawE)*ww+rn()*sh*.4;
+  me.pitch=clamp(dMix(pitchH,pitchE,ww)+rn()*sh*.4,-1.3,1.3);
+  // 4. light and screen effects
+  FLU.uFlI.value=FL_POWER*kf(t,[[0,1],[4.3,1],[4.6,.2]])*((t<1.4&&Math.random()<.22)?.2:1);
+  dFade.style.opacity=kf(t,[[0,0],[4.25,0],[4.58,1]]);
+  dBlood.style.opacity=Math.min(1,kf(t,[[0,0],[.85,0],[.95,.55],[1.6,.2],[3.3,.2],[4.3,.5],[4.5,.9],[4.7,.55],[6.7,.3]])+(t>4.7?Math.max(0,.3*Math.sin((t-4.7)*7)):0));
+  if(t>=6.7)showEnd(false,D.locker?'It tore the locker open and swallowed you whole.':(endgame?'So close to the exit. It swallowed you whole.':'It swallowed you whole.'));
+}
+
+/* ---------- death animation: setup, keyframes, sounds, monster mouth ---------- */
+let death=null, deathFlash=.5;
+const dFade=document.createElement('div'),dBlood=document.createElement('div');
+dFade.style.cssText='position:fixed;inset:0;pointer-events:none;background:#000;opacity:0;z-index:7';
+dBlood.style.cssText='position:fixed;inset:0;pointer-events:none;opacity:0;z-index:8;background:radial-gradient(ellipse at center,rgba(70,0,0,.15) 20%,rgba(150,0,0,.92) 100%)';
+document.body.appendChild(dFade);document.body.appendChild(dBlood);
+const _v1=new THREE.Vector3(),_v2=new THREE.Vector3(),_v3=new THREE.Vector3();
+const dMix=(a,b,t)=>a+(b-a)*t;
+function kf(t,k){ // keyframes [[time,value],...] with smooth easing between them
+  if(t<=k[0][0])return k[0][1];
+  for(let i=1;i<k.length;i++){if(t<=k[i][0]){const a=k[i-1],b=k[i];return a[1]+(b[1]-a[1])*ease((t-a[0])/(b[0]-a[0]))}}
+  return k[k.length-1][1];
+}
+/* timeline (seconds): 0 lunge · .8 grab · 1.5 lift · 2.8 jaw unhinges · 3.9 stare · 4.5 bite · 4.6 black · 6.7 end screen */
+const K_LEAN=[[0,.6],[.5,.8],[.9,.55],[1.5,.35],[2.7,-.1],[3.9,-.12],[4.2,-.05],[4.55,.55]];
+const K_HEAD=[[0,0],[.7,.25],[1.5,.2],[2.7,.3],[3.9,.4],[4.2,.35],[4.55,-.1]];
+const K_HS=[[0,1],[2,1],[3.4,1.45],[4.55,1.45]];
+const K_ARM=[[0,-1],[.45,-1.14],[.9,-.94],[1.5,-.85],[2.7,-.67],[4.2,-.67]];
+const K_ROLL=[[0,-.1],[.45,-.3],[.85,-.2],[1.1,.1],[4.2,.1]];
+const K_ELB=[[0,-.6],[.45,-.85],[.9,-.85],[1.5,-.84],[2.7,-1.12],[4.2,-1.12]];
+const K_JAW=[[0,.6],[.5,1],[1,.5],[2,.35],[2.8,1],[3.4,1.25],[4.3,1.25],[4.55,0]];
+const K_SHAKE=[[0,.01],[.6,.03],[.85,.08],[1.15,.02],[3.7,.012],[4.3,.05],[4.6,.03],[6.7,.012]];
+const chomp=v=>()=>{noise(.18,.75*v,240,2);noise(.12,.55*v,1700,3,.02);tone(120,36,.25,.5*v,'square');vib(140)};
+const DEATH_EV=[
+  [0,()=>{sfx.growl(1);tone(220,70,.9,.38,'sawtooth');noise(.8,.3,520,.5);vib([140,40,140])}],
+  [.62,()=>{noise(.35,.4,110,.7);tone(75,34,.35,.35)}],
+  [.9,()=>{sfx.scream();noise(.16,.5,2600,2);vib([220,60,220])}],
+  [1.3,()=>{sfx.creak();noise(.5,.16,2100,3)}],
+  [2.1,()=>{sfx.creak();tone(95,60,1.3,.12,'sawtooth')}],
+  [2.8,()=>{noise(1.1,.18,170,.6);tone(62,38,1.5,.16,'sawtooth')}],
+  [3.5,()=>{noise(1,.1,3200,2);tone(320,45,1,.1,'sawtooth')}],
+  [4.35,()=>{tone(50,28,.4,.3,'sine')}],
+  [4.5,chomp(1)],[5,chomp(.7)],[5.45,chomp(.55)],[5.85,chomp(.4)],
+  [6.2,()=>{tone(140,52,.4,.26,'sine');noise(.4,.14,210,.8)}],
+];
+function buildMaw(r){ // a big hinged mouth (gum, teeth, throat) that is attached to the monster's head
+  const g=new THREE.Group(),bone=mkMat({color:0xd8d2bd}),gum=mkMat({color:0x4a1216}),flesh=mkMat({color:0x2a0b0e});
+  const black=new THREE.MeshBasicMaterial({color:0x050001});
+  const part=(geo,mat,x,y,z,p)=>{const o=new THREE.Mesh(geo,mat);o.position.set(x,y,z);(p||g).add(o);return o};
+  const ball=new THREE.SphereGeometry(1,12,8),tooth=new THREE.ConeGeometry(.016,.075,5);
+  part(ball,black,0,-.2,.1).scale.set(.17,.13,.05);                       // dark throat wall
+  part(ball,gum,0,-.14,.27).scale.set(.17,.03,.17);                       // upper gum
+  for(let i=0;i<9;i++){const a=(i-4)/4*1.25;part(tooth,bone,Math.sin(a)*.145,-.185,.27+Math.cos(a)*.13).rotation.x=Math.PI}
+  const mj=new THREE.Group();mj.position.set(0,-.2,.12);g.add(mj);        // lower jaw (hinge)
+  part(ball,flesh,0,0,.17,mj).scale.set(.16,.03,.19);
+  for(let i=0;i<9;i++){const a=(i-4)/4*1.25;part(tooth,bone,Math.sin(a)*.125,.05,.17+Math.cos(a)*.12,mj)}
+  r.head.add(g);r.maw=g;r.mawJaw=mj;
+}
+function poseKiller(r,t){ // drives the killer's rig (after the normal animation has run), blending in over the first .3s
+  const bw=ease(t/.3),m=(c,g)=>c+(g-c)*bw;
+  r.body.rotation.x=m(r.body.rotation.x,kf(t,K_LEAN));r.body.position.y=m(r.body.position.y,1.08);
+  r.head.rotation.x=m(r.head.rotation.x,kf(t,K_HEAD));r.head.rotation.y=m(r.head.rotation.y,0);
+  r.head.scale.setScalar(kf(t,K_HS));
+  r.jaw.visible=false;r.mawJaw.rotation.x=m(r.mawJaw.rotation.x,kf(t,K_JAW));
+  const ax=kf(t,K_ARM),ro=kf(t,K_ROLL),el=kf(t,K_ELB);
+  for(const [A,sg] of [[r.armL,1],[r.armR,-1]]){
+    A.sh.rotation.x=m(A.sh.rotation.x,ax);A.sh.rotation.z=m(A.sh.rotation.z,ro*sg);A.el.rotation.x=m(A.el.rotation.x,el);
+  }
+  r.legL.hip.rotation.x=m(r.legL.hip.rotation.x,-.18);r.legR.hip.rotation.x=m(r.legR.hip.rotation.x,.12);
+  r.legL.knee.rotation.x=m(r.legL.knee.rotation.x,.1);r.legR.knee.rotation.x=m(r.legR.knee.rotation.x,.18);
+}
+function deathReset(){death=null;deathFlash=.5;dFade.style.opacity=0;dBlood.style.opacity=0}
+function deathStart(k){
+  death=null;deathFlash=.5;
+  const mo=mons[k]||mons[0];if(!mo)return;
+  const l=me.hid>=0?lockers[me.hid]:null;
+  const dx=mo.x-me.x,dz=mo.z-me.z,d=Math.hypot(dx,dz);
+  if(d>3.6)return;                                   // someone else was caught: you just get the short version
+  let ux,uz;
+  if(l){ux=l.fx;uz=l.fz}else if(d>.05){ux=dx/d;uz=dz/d}else{ux=-Math.sin(me.yaw);uz=-Math.cos(me.yaw)}
+  const cands=l?[2.1,1.8,1.5]:[1.6,1.35,1.1,.9];
+  let Dd=cands[cands.length-1];
+  for(const c of cands){if(!blocked(me.x+ux*c,me.z+uz*c,.3)){Dd=c;break}}
+  const r=mo.mesh.userData.rig;if(!r.maw)buildMaw(r);
+  const yT=Math.atan2(-ux,-uz);
+  death={t:0,ev:0,mo,px:me.x,pz:me.z,ux,uz,Mx:me.x+ux*Dd,Mz:me.z+uz*Dd,mx0:mo.mesh.position.x,mz0:mo.mesh.position.z,
+    ry0:mo.mesh.rotation.y,ryT:yT,yawT:yT,yaw0:me.yaw,pitch0:me.pitch,y0:l?1.5:EYE,pull:l?.9:.3,locker:!!l};
+  setBig(false);$('hud').style.display='none';
 }
 function showEnd(win,msg){
   state='over';tension=0;setBig(false);setPause(false);
@@ -1333,7 +1461,7 @@ function hud(){
   const t=(state==='play'&&!hideAnim)?findTarget():null;
   const txt=t?(t.k==='f'?'Take the fuse':t.k==='s'?'Place the fuse':t.k==='h'?(me.hid>=0?'Leave the locker':'Hide in the locker'):t.k==='x'?(endgame?'Open the gate':`Gate locked — place all fuses (${fuseCount}/${NEED})`):''):'';
   if(txt!==lastPrompt){lastPrompt=txt;$('prompt').textContent=txt;$('btnUse').classList.toggle('ready',!!t)}
-  $('flash').style.opacity=state==='dying'?.5+Math.random()*.4:closeness*closeness*.5;
+  $('flash').style.opacity=state==='dying'?deathFlash:closeness*closeness*.5;
   if((mapTick++&1)===0){drawMap();if(bigMap)drawBigMap()}
 }
 function update(dt){
@@ -1456,4 +1584,4 @@ $('bMenu').onclick=leaveGame;
 })();
 </script>
 </body>
-        </html>
+  </html>
