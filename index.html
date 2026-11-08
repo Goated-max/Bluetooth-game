@@ -1790,6 +1790,35 @@ dyingTick=function(dt){
 };
 const _hud=hud;hud=function(){_hud();if(death&&state==='dying')$('flash').style.opacity=0};
 const _rr=resetRound;resetRound=function(){_rr.apply(null,arguments);reset()};
+  /* ===== DEBUG ADD-ON: paste right before the final "})();" (after the death block) ===== */
+(()=>{
+const lab=document.createElement('div');
+lab.style.cssText='position:fixed;left:6px;bottom:6px;z-index:98;color:#7f7;font:11px monospace;pointer-events:none;white-space:pre;text-shadow:0 0 3px #000';
+document.body.appendChild(lab);
+let frames=0,head='';
+const _die=die;
+die=function(k){
+  frames=0;_die(k);
+  head='die() ran -> '+($('hud').style.display==='none'?'FULL animation started':'SHORT version (no monster close enough)');
+  lab.textContent=head;
+};
+const _dt=dyingTick;
+dyingTick=function(dt){frames++;_dt(dt);if(state==='dying')lab.textContent=head+'\nframes: '+frames};
+const _rr=resetRound;resetRound=function(){_rr.apply(null,arguments);head='';lab.textContent=''};
+// test button in the pause menu: puts a monster in front of you (or in front of your locker) and lets it eat you
+const tb=document.createElement('button');tb.className='mb sm';tb.textContent='TEST: LET A MONSTER EAT ME';
+$('pause').appendChild(tb);
+tb.onclick=()=>{
+  setPause(false);
+  if(state!=='play'||!mons.length)return;
+  const mo=mons[0],l=me.hid>=0?lockers[me.hid]:null;
+  const fx=l?l.fx:-Math.sin(me.yaw),fz=l?l.fz:-Math.cos(me.yaw);
+  mo.x=me.x+fx*1.2;mo.z=me.z+fz*1.2;mo.ry=Math.atan2(-fx,-fz);
+  mo.mesh.position.set(mo.x,0,mo.z);mo.mesh.rotation.y=mo.ry;
+  die(0);
+};
+})();
+/* ===== END DEBUG ADD-ON ===== */
 })();
 /* ===== END DEATH ANIMATION ===== */
 })();
