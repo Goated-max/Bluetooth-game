@@ -297,8 +297,10 @@ function glowTex(){
 function ventTex(){
   const c=document.createElement('canvas');c.width=64;c.height=128;const g=c.getContext('2d');
   g.fillStyle='#2b3330';g.fillRect(0,0,64,128);
-  g.fillStyle='#070a09';for(let y=14;y<62;y+=8)g.fillRect(10,y,44,3);
-  g.fillStyle='#3c4743';g.fillRect(0,0,64,3);g.fillRect(0,125,64,3);g.fillRect(28,84,8,18);
+  g.fillStyle='#070a09';
+  for(let y=14;y<62;y+=8)g.fillRect(8,y,38,3);
+  for(let y=92;y<116;y+=8)g.fillRect(8,y,38,3);
+  g.fillStyle='#3c4743';g.fillRect(0,0,64,3);g.fillRect(0,125,64,3);
   return new THREE.CanvasTexture(c);
 }
 function signTex(ok){
@@ -317,10 +319,29 @@ function mkFrame(w,h,d,t,mat){ // rectangular wire frame made of 12 thin bars (a
 }
 function mkLocker(vt){
   const g=new THREE.Group();
-  const body=new THREE.Mesh(new THREE.BoxGeometry(1,2.3,.9),mkMat({color:0x2b3330}));body.position.y=1.15;
-  const front=new THREE.Mesh(new THREE.PlaneGeometry(.9,2.15),mkMat({map:vt}));front.position.set(0,1.15,.456);
-  const dot=new THREE.Mesh(new THREE.SphereGeometry(.035,6,6),new THREE.MeshBasicMaterial({color:0x33cc77}));dot.position.set(0,2.05,.47);
-  g.add(body,front,dot);return g;
+  const outer=mkMat({color:0x2b3330}),shelfM=mkMat({color:0x1d2522}),metal=mkMat({color:0xb9c0c6}),dmetal=mkMat({color:0x50565c});
+  const vent=mkMat({map:vt}),innerFace=mkMat({color:0x131917});
+  const inB=mkMat({color:0x131917});inB.side=THREE.BackSide;                 // inside walls
+  const none=new THREE.MeshBasicMaterial({visible:false});                    // the open front face
+  const box=(w,h,d,m,x,y,z,parent)=>{const o=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m);o.position.set(x,y,z);(parent||g).add(o);return o};
+  // hollow cabinet: outer shell + dark inner shell, front left open so you can see inside
+  box(1,2.3,.9,[outer,outer,outer,outer,none,outer],0,1.15,0);
+  box(.93,2.22,.86,[inB,inB,inB,inB,none,inB],0,1.15,0);
+  box(.9,.03,.6,shelfM,0,1.95,-.1);
+  const rail=new THREE.Mesh(new THREE.CylinderGeometry(.012,.012,.84,8),metal);rail.rotation.z=Math.PI/2;rail.position.set(0,2.1,-.38);g.add(rail);
+  // hinged door (pivot on the left edge)
+  const door=new THREE.Group();door.position.set(-.5,1.15,.468);g.add(door);
+  const panel=new THREE.Mesh(new THREE.BoxGeometry(.96,2.2,.035),[dmetal,dmetal,dmetal,dmetal,vent,innerFace]);panel.position.x=.48;door.add(panel);
+  // handle: two posts + a bar, and a small lock plate underneath
+  for(const sy of [-1,1])box(.03,.03,.05,metal,.8,sy*.12,.04,door);
+  const bar=new THREE.Mesh(new THREE.CylinderGeometry(.014,.014,.3,10),metal);bar.position.set(.8,0,.07);door.add(bar);
+  box(.07,.09,.012,dmetal,.8,-.27,.0235,door);
+  // hinge knuckles
+  for(const y of [-.7,.7]){const k=new THREE.Mesh(new THREE.CylinderGeometry(.02,.02,.16,8),dmetal);k.position.set(0,y,.012);door.add(k)}
+  // little green "you can hide here" light on the frame
+  const dot=new THREE.Mesh(new THREE.SphereGeometry(.03,8,6),new THREE.MeshBasicMaterial({color:0x33cc77}));dot.position.set(0,2.27,.475);g.add(dot);
+  g.userData.door=door;
+  return g;
 }
 
 /* ---------- the monsters: full creatures built from parts, with a run cycle ---------- */
@@ -535,7 +556,7 @@ function buildWorld(){
     p.rotation.x=-Math.PI/2;p.rotation.z=Math.random()*6;p.position.set(tc(c[0])+(Math.random()-.5)*2.4,.012,tc(c[1])+(Math.random()-.5)*2.4);scene.add(p);
   }
   const vt=ventTex();
-  L.lk.forEach(l=>{lockers.push(l);const m=mkLocker(vt);m.position.set(l.x,0,l.z);m.rotation.y=Math.atan2(l.fx,l.fz);scene.add(m)});
+  L.lk.forEach(l=>{lockers.push(l);const m=mkLocker(vt);m.position.set(l.x,0,l.z);m.rotation.y=Math.atan2(l.fx,l.fz);scene.add(m);l.door=m.userData.door;l.open=0;l.pulse=0;l.snap=0;l.was=false});
   // highlight materials (drawn on top of walls so they can be seen from far away)
   frameMat=new THREE.MeshBasicMaterial({color:0xffb040,transparent:true,opacity:.9,depthTest:false,fog:false});
   skMat=new THREE.MeshBasicMaterial({color:0x40e0ff,transparent:true,opacity:.5,depthTest:false,fog:false,side:THREE.DoubleSide});
@@ -585,6 +606,7 @@ function resetRound(){
   flOn=true;batt=100;stam=100;exhausted=false;fuseCount=0;stepAcc=0;bobT=0;noiseR=0;
   hasScan=false;scanUsed=false;scanLeft=0;closeness=0;nearD=99;hb=0;dyT=0;killer=0;lastPrompt='';hidFl=true;tension=0;
   endgame=false;carry=-1;lastObj='';
+  hideAnim=null;animY=null;
   pu.got=false;net.t=0;
   $('btnScan').style.display='none';$('btnLight').classList.add('on');$('slats').style.display='none';$('prompt').textContent='';
 }
@@ -799,27 +821,90 @@ function sawBy(px,pz){
   for(let k=0;k<mons.length;k++){const mo=mons[k];if(mo.mode==='hunt'&&Math.hypot(mo.x-px,mo.z-pz)<14&&los(mo.x,mo.z,px,pz))return k}
   return -1;
 }
+
+/* ---------- locker doors + first-person hide / exit animation ---------- */
+const DOOR_MAX=1.95;
+const ease=t=>{t=clamp(t,0,1);return t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2};
+const angDiff=(a,b)=>Math.atan2(Math.sin(b-a),Math.cos(b-a));
+let hideAnim=null, animY=null;
 function toggleHide(i){
+  if(hideAnim)return;
   const l=lockers[i];if(!l)return;
   if(me.hid<0){
-    me.sawBy=(!endgame&&role!=='guest')?sawBy(me.x,me.z):-1;me.saw=me.sawBy>=0;   // before the final phase, a hunting monster with line of sight sees you duck in
-    me.hid=i;me.risk=0;hidFl=flOn;flOn=false;$('btnLight').classList.remove('on');
-    me.x=l.x;me.z=l.z;me.yaw=hidYaw=Math.atan2(-l.fx,-l.fz);me.pitch=0;
-    $('slats').style.display='block';sfx.door();
-    toast(endgame?'Safe in here. They will know where you are when you come out.':(me.saw?'It saw you...':'Stay still. Stay quiet.'),2400);
+    // if a monster is hunting and can see you right now, it sees you duck in (before the final phase)
+    hideAnim={k:'in',i,t:0,sx:me.x,sz:me.z,y0:me.yaw,p0:me.pitch,saw:(!endgame&&role!=='guest')?sawBy(me.x,me.z):-1,flDone:false};
+    hidFl=flOn;
+  }else hideAnim={k:'out',i,t:0};
+  sfx.door();sfx.creak();
+}
+function updateHideAnim(dt){
+  const a=hideAnim,l=lockers[a.i];
+  if(!l){hideAnim=null;animY=null;return}
+  a.t+=dt;const t=a.t;
+  const yIn=Math.atan2(l.fx,l.fz),px=l.x+l.fx*1.2,pz=l.z+l.fz*1.2;   // yIn = looking into the locker, (px,pz) = the spot in front of it
+  if(a.k==='in'){
+    l.open=t<1.05?ease(t/.5):1-ease((t-1.05)/.5);
+    if(t<.45){                         // walk up to the locker while the door swings open
+      const e=ease(t/.45);
+      me.x=a.sx+(px-a.sx)*e;me.z=a.sz+(pz-a.sz)*e;me.yaw=a.y0+angDiff(a.y0,yIn)*e;me.pitch=a.p0*(1-e);animY=EYE;
+    }else if(t<1){                     // step inside
+      const e=ease((t-.45)/.55);
+      me.x=px+(l.x-px)*e;me.z=pz+(l.z-pz)*e;me.yaw=yIn;me.pitch=0;animY=EYE-.1*e+Math.sin(e*Math.PI)*.04;
+    }else{                             // turn around inside and pull the door shut
+      const e=ease((t-1)/.6);
+      if(!a.flDone){a.flDone=true;flOn=false;$('btnLight').classList.remove('on')}
+      me.x=l.x;me.z=l.z;me.yaw=yIn+Math.PI*e;me.pitch=0;animY=EYE-.1;
+    }
+    if(t>=1.65)finishHideIn(a,l);
   }else{
-    me.x=l.x+l.fx*1.2;me.z=l.z+l.fz*1.2;me.hid=-1;me.saw=false;me.sawBy=-1;me.risk=0;
-    flOn=hidFl&&batt>0;$('btnLight').classList.toggle('on',flOn);
-    $('slats').style.display='none';sfx.door();
+    l.open=ease(t/.45);                // door swings open
+    if(t>.35){                         // step out
+      const e=ease((t-.35)/.7);
+      me.x=l.x+(px-l.x)*e;me.z=l.z+(pz-l.z)*e;animY=EYE-.1+.1*e+Math.sin(e*Math.PI)*.03;
+    }else animY=EYE-.1;
+    if(t>=1.05)finishHideOut(a,l);
   }
 }
+function finishHideIn(a,l){
+  hideAnim=null;animY=null;l.open=0;
+  me.sawBy=a.saw;me.saw=a.saw>=0;me.hid=a.i;me.risk=0;flOn=false;$('btnLight').classList.remove('on');
+  me.x=l.x;me.z=l.z;me.yaw=hidYaw=Math.atan2(-l.fx,-l.fz);me.pitch=0;
+  toast(endgame?'Safe in here. They will know where you are when you come out.':(me.saw?'It saw you...':'Stay still. Stay quiet.'),2400);
+}
+function finishHideOut(a,l){
+  hideAnim=null;animY=null;
+  me.x=l.x+l.fx*1.2;me.z=l.z+l.fz*1.2;me.hid=-1;me.saw=false;me.sawBy=-1;me.risk=0;
+  flOn=hidFl&&batt>0;$('btnLight').classList.toggle('on',flOn);
+}
+function updateLockers(dt){ // every locker door: swings by itself when a friend uses it, closes after you leave, bursts open when you're caught
+  for(let i=0;i<lockers.length;i++){
+    const l=lockers[i];if(!l.door)continue;
+    if(!(hideAnim&&hideAnim.i===i)){
+      let want=0;
+      if(l.pulse>0){l.pulse-=dt;want=1}
+      if(l.snap)want=1;
+      l.open+=(want-l.open)*Math.min(1,dt*(l.snap?14:want?5:3));
+      if(Math.abs(want-l.open)<.004)l.open=want;
+    }
+    l.door.rotation.y=-DOOR_MAX*l.open;
+    const isOpen=l.open>.05;
+    if(l.was&&!isOpen&&Math.hypot(l.x-me.x,l.z-me.z)<9)sfx.click();   // latch clicks shut
+    l.was=isOpen;
+  }
+}
+function slatsUpdate(){ // the black slats you see through the door vents fade with the door
+  const ai=me.hid>=0?me.hid:(hideAnim&&hideAnim.k==='in'&&hideAnim.t>1?hideAnim.i:-1);
+  const l=ai>=0?lockers[ai]:null,op=l?1-l.open:0,s=$('slats');
+  s.style.display=op>.01?'block':'none';s.style.opacity=op;
+}
+
 function doUse(){
-  if(state!=='play')return;const t=findTarget();
+  if(state!=='play'||hideAnim)return;const t=findTarget();
   if(!t){sfx.click();toast('Nothing here.',1000);return}
   if(t.k==='h'){toggleHide(t.i);return}
   if(role==='guest'){
     if(t.k==='x'&&!endgame){toast(`The gate is locked. Place all the fuses first (${fuseCount}/${NEED}).`);return}
-    send({t:'use',k:t.k,i:t.i});
+    send({t:t.k==='x'?'use':'use',k:t.k,i:t.i});
   }else applyUse(t.k,t.i,me.id);
 }
 function useScan(){
@@ -828,7 +913,7 @@ function useScan(){
   toast('Fuse locations outlined.',2500);
 }
 function toggleLight(){
-  if(state!=='play')return;
+  if(state!=='play'||hideAnim)return;
   if(me.hid>=0){toast('Too risky to use the light in here.',1200);return}
   if(batt<=0){toast('The battery is dead.',1200);return}
   flOn=!flOn;sfx.click();$('btnLight').classList.toggle('on',flOn);
@@ -971,7 +1056,10 @@ function monsterFollow(dt){
 
 /* ---------- end states / rounds / pause ---------- */
 function die(k){
-  if(state!=='play')return;state='dying';dyT=0;killer=k||0;if(role==='host')send({t:'dead',k:killer});sfx.scream();vib([200,80,300]);
+  if(state!=='play')return;state='dying';dyT=0;killer=k||0;
+  hideAnim=null;animY=null;
+  if(me.hid>=0&&lockers[me.hid]){lockers[me.hid].snap=1;sfx.door()}   // the monster rips the locker door open
+  if(role==='host')send({t:'dead',k:killer});sfx.scream();vib([200,80,300]);
 }
 function dyingTick(dt){
   dyT+=dt;const mo=mons[killer]||mons[0],dx=mo.x-me.x,dz=mo.z-me.z,ty=Math.atan2(-dx,-dz);
@@ -1036,6 +1124,7 @@ function dropPeer(id){
 function setPeer(id,a){
   if(!scene||id===undefined||id===me.id)return;
   const p=getPeer(id),now=performance.now()/1000,hid=a[4]||0,prev=p.hid||0;
+  if(hid!==prev){const li=(hid||prev)-1;if(lockers[li])lockers[li].pulse=1.2}   // a friend hid or came out: their locker door swings open
   if(!p.active){p.active=true;p.x=p.tx=a[0];p.z=p.tz=a[1];p.yaw=p.tyaw=a[2];p.mesh.visible=true;p.lastT=0}
   else if(p.lastT){const dt=now-p.lastT;if(dt>0)p.v=Math.hypot(a[0]-p.tx,a[1]-p.tz)/dt}
   if(role==='host'&&!prev&&hid&&!endgame){p.sawBy=sawBy(a[0],a[1]);p.saw=p.sawBy>=0;p.risk=0}
@@ -1228,7 +1317,8 @@ function animateWorld(dt){
 }
 function updateCamera(){
   const bob=Math.sin(bobT)*.045,sh=closeness*closeness*.03;
-  camera.position.set(me.x+(Math.random()-.5)*sh,(me.hid>=0?1.5:EYE+bob)+(Math.random()-.5)*sh,me.z+(Math.random()-.5)*sh);
+  const cy=animY!==null?animY:(me.hid>=0?1.5:EYE+bob);   // during the locker animation the height comes from the animation
+  camera.position.set(me.x+(Math.random()-.5)*sh,cy+(Math.random()-.5)*sh,me.z+(Math.random()-.5)*sh);
   camera.rotation.set(me.pitch,me.yaw,0);
 }
 function hud(){
@@ -1240,7 +1330,7 @@ function hud(){
     if(scanLeft>0){b.textContent='SCAN '+Math.ceil(scanLeft);b.classList.add('act')}
     else{b.classList.remove('act');if(scanUsed)b.style.display='none'}
   }
-  const t=state==='play'?findTarget():null;
+  const t=(state==='play'&&!hideAnim)?findTarget():null;
   const txt=t?(t.k==='f'?'Take the fuse':t.k==='s'?'Place the fuse':t.k==='h'?(me.hid>=0?'Leave the locker':'Hide in the locker'):t.k==='x'?(endgame?'Open the gate':`Gate locked — place all fuses (${fuseCount}/${NEED})`):''):'';
   if(txt!==lastPrompt){lastPrompt=txt;$('prompt').textContent=txt;$('btnUse').classList.toggle('ready',!!t)}
   $('flash').style.opacity=state==='dying'?.5+Math.random()*.4:closeness*closeness*.5;
@@ -1250,7 +1340,8 @@ function update(dt){
   time+=dt;
   carry=carryOf(me.id);
   if(state==='play'){
-    if(me.hid<0){movePlayer(dt);pickups()}
+    if(hideAnim){updateHideAnim(dt);noiseR=0}
+    else if(me.hid<0){movePlayer(dt);pickups()}
     else{noiseR=0;stam=Math.min(100,stam+14*dt);if(exhausted&&stam>30)exhausted=false;me.yaw=clamp(me.yaw,hidYaw-.9,hidYaw+.9)}
     lightUpdate(dt);
   }
@@ -1258,6 +1349,7 @@ function update(dt){
   nearD=1e9;for(const mo of mons){mo.d=Math.hypot(me.x-mo.x,me.z-mo.z);if(mo.d<nearD)nearD=mo.d}
   closeness=clamp(1-nearD/22,0,1);
   tension=state==='play'?clamp(Math.max(closeness*1.15,mons.some(m=>m.mode==='hunt')?.5:0),0,1):0;
+  updateLockers(dt);
   animateWorld(dt);
   if(state==='play'){
     if(closeness>.05){hb-=dt;if(hb<=0){hb=1.1-.7*closeness;sfx.heart(.18+.4*closeness)}}
@@ -1266,7 +1358,7 @@ function update(dt){
   }
   netTick(dt);
   if(state==='dying')dyingTick(dt);
-  updateCamera();hud();
+  updateCamera();hud();slatsUpdate();
 }
 function loop(){
   requestAnimationFrame(loop);
@@ -1364,4 +1456,4 @@ $('bMenu').onclick=leaveGame;
 })();
 </script>
 </body>
-    </html>
+        </html>
