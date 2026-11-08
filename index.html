@@ -1612,6 +1612,186 @@ $('bRetry').onclick=()=>{
   else hostRestart();
 };
 $('bMenu').onclick=leaveGame;
+  /* ===== DEATH ANIMATION: paste this whole block right before the final "})();" of the script ===== */
+(()=>{
+const DOOR=1.95;
+const dEase=t=>{t=Math.max(0,Math.min(1,t));return t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2};
+const dAng=(a,b)=>Math.atan2(Math.sin(b-a),Math.cos(b-a));
+const dMix=(a,b,t)=>a+(b-a)*t;
+function kf(t,k){ // keyframes [[time,value],...] with smooth easing between them
+  if(t<=k[0][0])return k[0][1];
+  for(let i=1;i<k.length;i++){if(t<=k[i][0]){const a=k[i-1],b=k[i];return a[1]+(b[1]-a[1])*dEase((t-a[0])/(b[0]-a[0]))}}
+  return k[k.length-1][1];
+}
+let death=null;
+const dFade=document.createElement('div'),dBlood=document.createElement('div'),banner=document.createElement('div');
+dFade.style.cssText='position:fixed;inset:0;pointer-events:none;background:#000;opacity:0;z-index:7';
+dBlood.style.cssText='position:fixed;inset:0;pointer-events:none;opacity:0;z-index:8;background:radial-gradient(ellipse at center,rgba(70,0,0,.15) 20%,rgba(150,0,0,.92) 100%)';
+banner.style.cssText='position:fixed;left:0;right:0;top:0;z-index:99;background:#a00;color:#fff;font:12px monospace;padding:6px;display:none;white-space:pre-wrap;pointer-events:none';
+document.body.appendChild(dFade);document.body.appendChild(dBlood);document.body.appendChild(banner);
+const showErr=(w,e)=>{banner.style.display='block';banner.textContent='Death animation error ('+w+'): '+((e&&e.message)||e)};
+const _v1=new THREE.Vector3(),_v2=new THREE.Vector3(),_v3=new THREE.Vector3();
+/* timeline (seconds). Locker catches add LOCKER_PRE seconds first (banging, then the door is torn open):
+   0 lunge · .8 grab · 1.5 lift · 2.8 jaw unhinges · 3.9 stare · 4.5 bite · 4.6 black · 6.7 end screen */
+const K_LEAN=[[0,.6],[.5,.8],[.9,.55],[1.5,.35],[2.7,-.1],[3.9,-.12],[4.2,-.05],[4.55,.55]];
+const K_HEAD=[[0,0],[.7,.25],[1.5,.2],[2.7,.3],[3.9,.4],[4.2,.35],[4.55,-.1]];
+const K_HS=[[0,1],[2,1],[3.4,1.45],[4.55,1.45]];
+const K_ARM=[[0,-1],[.45,-1.14],[.9,-.94],[1.5,-.85],[2.7,-.67],[4.2,-.67]];
+const K_ROLL=[[0,-.1],[.45,-.3],[.85,-.2],[1.1,.1],[4.2,.1]];
+const K_ELB=[[0,-.6],[.45,-.85],[.9,-.85],[1.5,-.84],[2.7,-1.12],[4.2,-1.12]];
+const K_JAW=[[0,.6],[.5,1],[1,.5],[2,.35],[2.8,1],[3.4,1.25],[4.3,1.25],[4.55,0]];
+const K_SHAKE=[[0,.01],[.6,.03],[.85,.08],[1.15,.02],[3.7,.012],[4.3,.05],[4.6,.03],[6.7,.012]];
+const chomp=v=>()=>{noise(.18,.75*v,240,2);noise(.12,.55*v,1700,3,.02);tone(120,36,.25,.5*v,'square');vib(140)};
+const DEATH_EV=[
+  [0,()=>{sfx.growl(1);tone(220,70,.9,.38,'sawtooth');noise(.8,.3,520,.5);vib([140,40,140])}],
+  [.62,()=>{noise(.35,.4,110,.7);tone(75,34,.35,.35)}],
+  [.9,()=>{sfx.scream();noise(.16,.5,2600,2);vib([220,60,220])}],
+  [1.3,()=>{sfx.creak();noise(.5,.16,2100,3)}],
+  [2.1,()=>{sfx.creak();tone(95,60,1.3,.12,'sawtooth')}],
+  [2.8,()=>{noise(1.1,.18,170,.6);tone(62,38,1.5,.16,'sawtooth')}],
+  [3.5,()=>{noise(1,.1,3200,2);tone(320,45,1,.1,'sawtooth')}],
+  [4.35,()=>{tone(50,28,.4,.3,'sine')}],
+  [4.5,chomp(1)],[5,chomp(.7)],[5.45,chomp(.55)],[5.85,chomp(.4)],
+  [6.2,()=>{tone(140,52,.4,.26,'sine');noise(.4,.14,210,.8)}],
+];
+const LOCKER_PRE=1.7,bangT=[.55,.85,1.1];
+const bangAmp=t=>bangT.reduce((s,b)=>s+Math.exp(-Math.pow((t-b)/.06,2)),0);
+const bang=v=>()=>{noise(.14,.55*v,420,2);tone(150,60,.16,.45*v,'square');vib(60)};
+const PRE_EV=[
+  [0,()=>{sfx.thud();sfx.growl(.8)}],
+  [.1,()=>sfx.heart(.45)],[.3,()=>sfx.thud()],
+  [.55,bang(.8)],[.65,()=>sfx.heart(.5)],[.85,bang(.9)],[1.05,()=>sfx.heart(.55)],[1.1,bang(1)],
+  [1.2,()=>{noise(.6,.6,1400,2);tone(260,70,.5,.45,'sawtooth');sfx.door();vib([200,50,200])}],
+  [1.45,()=>{noise(.3,.5,100,.7);tone(80,40,.3,.4)}],
+];
+const lockerDoorOpen=t=>kf(t,[[0,0],[1.2,0],[1.38,1.25],[1.55,.95],[1.75,1.05]])+(t<1.2?Math.max(0,.05*bangAmp(t)+.008*Math.sin(t*55)):0);
+
+function buildMaw(r){ // a big hinged mouth (gum, teeth, throat) attached to the monster's head
+  const g=new THREE.Group(),bone=mkMat({color:0xd8d2bd}),gum=mkMat({color:0x4a1216}),flesh=mkMat({color:0x2a0b0e});
+  const black=new THREE.MeshBasicMaterial({color:0x050001});
+  const part=(geo,mat,x,y,z,p)=>{const o=new THREE.Mesh(geo,mat);o.position.set(x,y,z);(p||g).add(o);return o};
+  const ball=new THREE.SphereGeometry(1,12,8),tooth=new THREE.ConeGeometry(.016,.075,5);
+  part(ball,black,0,-.2,.1).scale.set(.17,.13,.05);
+  part(ball,gum,0,-.14,.27).scale.set(.17,.03,.17);
+  for(let i=0;i<9;i++){const a=(i-4)/4*1.25;part(tooth,bone,Math.sin(a)*.145,-.185,.27+Math.cos(a)*.13).rotation.x=Math.PI}
+  const mj=new THREE.Group();mj.position.set(0,-.2,.12);g.add(mj);
+  part(ball,flesh,0,0,.17,mj).scale.set(.16,.03,.19);
+  for(let i=0;i<9;i++){const a=(i-4)/4*1.25;part(tooth,bone,Math.sin(a)*.125,.05,.17+Math.cos(a)*.12,mj)}
+  r.head.add(g);r.maw=g;r.mawJaw=mj;
+}
+function poseKiller(r,t,force){ // drives the killer's rig after the normal animation has run
+  const bw=force?1:dEase(t/.3),m=(c,g)=>c+(g-c)*bw;
+  r.body.rotation.x=m(r.body.rotation.x,kf(t,K_LEAN));r.body.position.y=m(r.body.position.y,1.08);
+  r.head.rotation.x=m(r.head.rotation.x,kf(t,K_HEAD));r.head.rotation.y=m(r.head.rotation.y,0);
+  r.head.scale.setScalar(kf(t,K_HS));
+  r.jaw.visible=false;r.mawJaw.rotation.x=m(r.mawJaw.rotation.x,kf(t,K_JAW));
+  const ax=kf(t,K_ARM),ro=kf(t,K_ROLL),el=kf(t,K_ELB);
+  for(const [A,sg] of [[r.armL,1],[r.armR,-1]]){
+    A.sh.rotation.x=m(A.sh.rotation.x,ax);A.sh.rotation.z=m(A.sh.rotation.z,ro*sg);A.el.rotation.x=m(A.el.rotation.x,el);
+  }
+  r.legL.hip.rotation.x=m(r.legL.hip.rotation.x,-.18);r.legR.hip.rotation.x=m(r.legR.hip.rotation.x,.12);
+  r.legL.knee.rotation.x=m(r.legL.knee.rotation.x,.1);r.legR.knee.rotation.x=m(r.legR.knee.rotation.x,.18);
+}
+function reset(){death=null;dFade.style.opacity=0;dBlood.style.opacity=0;banner.style.display='none'}
+function start(k){
+  death=null;
+  const mo=mons[k]||mons[0];if(!mo)return;
+  const l=me.hid>=0?lockers[me.hid]:null;
+  const dx=mo.x-me.x,dz=mo.z-me.z,d=Math.hypot(dx,dz);
+  if(d>3.6)return;                                   // someone else was caught: you just get the short version
+  let ux,uz;
+  if(l){ux=l.fx;uz=l.fz}else if(d>.05){ux=dx/d;uz=dz/d}else{ux=-Math.sin(me.yaw);uz=-Math.cos(me.yaw)}
+  const cands=l?[2.1,1.8,1.5]:[1.6,1.35,1.1,.9];
+  let Dd=cands[cands.length-1];
+  for(const c of cands){if(!blocked(me.x+ux*c,me.z+uz*c,.3)){Dd=c;break}}
+  const r=mo.mesh.userData.rig;if(!r.maw)buildMaw(r);
+  const yT=Math.atan2(-ux,-uz);
+  death={t:0,ev:0,pev:0,mo,px:me.x,pz:me.z,ux,uz,Mx:me.x+ux*Dd,Mz:me.z+uz*Dd,mx0:mo.mesh.position.x,mz0:mo.mesh.position.z,
+    ry0:mo.mesh.rotation.y,ryT:yT,yawT:yT,yawS:me.yaw,yaw0:l?yT:me.yaw,pitch0:me.pitch,y0:l?1.5:EYE,pull:l?.9:.3,locker:!!l,li:l?me.hid:-1};
+  setBig(false);$('hud').style.display='none';
+}
+function tick(dt){
+  const D=death;
+  D.t+=dt;
+  const t=D.t,PRE=D.locker?LOCKER_PRE:0,tm=t-PRE,mo=D.mo,r=mo.mesh.userData.rig,l=D.locker?lockers[D.li]:null,rn=()=>Math.random()-.5;
+  while(D.locker&&D.pev<PRE_EV.length&&t>=PRE_EV[D.pev][0]){PRE_EV[D.pev][1]();D.pev++}
+  while(tm>=0&&D.ev<DEATH_EV.length&&tm>=DEATH_EV[D.ev][0]){DEATH_EV[D.ev][1]();D.ev++}
+  if(l&&l.door){const o=lockerDoorOpen(t);l.open=o;l.snap=0;l.door.rotation.y=-DOOR*o}   // the locker door is driven by the animation
+  if(tm<0){ // prelude: you are inside the locker, the monster is outside banging on the door
+    const a2=dEase(t/.6),sh=.012+.03*bangAmp(t);
+    mo.mesh.position.set(dMix(D.mx0,D.Mx,a2),0,dMix(D.mz0,D.Mz,a2));
+    mo.mesh.rotation.y=D.ry0+dAng(D.ry0,D.ryT)*dEase(t/.4);
+    poseKiller(r,0,true);
+    for(const A of [r.armL,r.armR])A.sh.rotation.x+=.22*bangAmp(t);
+    mo.mesh.updateMatrixWorld(true);
+    me.x=D.px+rn()*sh;me.z=D.pz+rn()*sh;animY=D.y0+rn()*sh;
+    me.yaw=D.yawS+dAng(D.yawS,D.yawT)*dEase(t/.6)+rn()*sh*.4;me.pitch=D.pitch0+rn()*sh*.4;
+    FLU.uFlI.value=FL_POWER*(t<1.2?0:(Math.random()<.5?1:.25));
+    dFade.style.opacity=0;dBlood.style.opacity=.08+.07*Math.max(0,Math.sin(t*9));
+    return;
+  }
+  // 1. the monster lunges in, faces you and strikes its pose
+  const a=D.locker?1:dEase(tm/.7);
+  mo.mesh.position.set(dMix(D.mx0,D.Mx,a),0,dMix(D.mz0,D.Mz,a));
+  mo.mesh.rotation.y=D.ry0+dAng(D.ry0,D.ryT)*(D.locker?1:dEase(tm/.5));
+  poseKiller(r,tm,D.locker);
+  mo.mesh.updateMatrixWorld(true);
+  // 2. its claws hold you: the body is shifted so the hands stay exactly where you are
+  r.armL.el.localToWorld(_v1.set(0,-.8,0));r.armR.el.localToWorld(_v2.set(0,-.8,0));
+  const hx=(_v1.x+_v2.x)/2,hy=(_v1.y+_v2.y)/2,hz=(_v1.z+_v2.z)/2;
+  const pull=kf(tm,[[0,0],[1.5,0],[2.8,D.pull],[4.2,D.pull]]);
+  const wH=dEase((tm-.8)/.5),wy=dEase((tm-.9)/.5);
+  mo.mesh.position.x+=(D.px+D.ux*pull-hx)*wH;mo.mesh.position.z+=(D.pz+D.uz*pull-hz)*wH;
+  mo.mesh.updateMatrixWorld(true);
+  // 3. camera: first held by the claws, then pulled into the mouth
+  const cx=D.px+D.ux*(pull-.1*wH),cz=D.pz+D.uz*(pull-.1*wH);
+  const cy=dMix(D.y0-.18*Math.sin(Math.min(tm/.7,1)*Math.PI),hy+.3,wy);
+  r.head.localToWorld(_v3.set(0,-.17,.2));
+  const mxw=_v3.x,myw=_v3.y,mzw=_v3.z;
+  r.head.localToWorld(_v1.set(0,0,0));r.head.localToWorld(_v2.set(0,0,1));
+  let Fx=_v2.x-_v1.x,Fy=_v2.y-_v1.y,Fz=_v2.z-_v1.z;const Fl=Math.hypot(Fx,Fy,Fz)||1;Fx/=Fl;Fy/=Fl;Fz/=Fl;
+  const wl=dEase(tm/.45),bump=kf(tm,[[0,0],[.85,0],[1.05,1],[1.5,1],[2.1,0]]);
+  const lh=Math.hypot(mxw-cx,mzw-cz)||1;
+  const yawH=D.yaw0+dAng(D.yaw0,D.yawT)*wl;
+  const pitchH=dMix(D.pitch0,Math.atan2(myw-cy,lh),wl)-.3*bump;
+  const ww=dEase((tm-3)/.8),dEnd=dEase((tm-3.95)/.6);
+  const dh=Math.hypot(mxw-cx,myw-cy,mzw-cz),dd=dMix(dh,.04,dEnd);
+  const qx=mxw+Fx*dd,qy=myw+Fy*dd,qz=mzw+Fz*dd;
+  const yawE=Math.atan2(Fx,Fz),pitchE=Math.asin(clamp(-Fy,-1,1));
+  const sh=kf(tm,K_SHAKE);
+  me.x=dMix(cx,qx,ww)+rn()*sh;me.z=dMix(cz,qz,ww)+rn()*sh;animY=dMix(cy,qy,ww)+rn()*sh;
+  me.yaw=yawH+dAng(yawH,yawE)*ww+rn()*sh*.4;
+  me.pitch=clamp(dMix(pitchH,pitchE,ww)+rn()*sh*.4,-1.3,1.3);
+  // 4. light and screen effects
+  FLU.uFlI.value=FL_POWER*kf(tm,[[0,1],[4.3,1],[4.6,.2]])*((tm<1.4&&Math.random()<.22)?.2:1);
+  dFade.style.opacity=kf(tm,[[0,0],[4.25,0],[4.58,1]]);
+  dBlood.style.opacity=Math.min(1,kf(tm,[[0,.1],[.85,.1],[.95,.55],[1.6,.2],[3.3,.2],[4.3,.5],[4.5,.9],[4.7,.55],[6.7,.3]])+(tm>4.7?Math.max(0,.3*Math.sin((tm-4.7)*7)):0));
+  if(tm>=6.7)showEnd(false,D.locker?'It tore the locker open and swallowed you whole.':(endgame?'So close to the exit. It swallowed you whole.':'It swallowed you whole.'));
+}
+
+/* these replace whatever versions of die / dyingTick / hud / resetRound are earlier in the file */
+die=function(k){
+  if(state!=='play')return;state='dying';dyT=0;killer=k||0;
+  hideAnim=null;animY=null;
+  try{start(killer)}catch(e){death=null;showErr('start',e)}
+  if(me.hid>=0&&lockers[me.hid]&&!death){lockers[me.hid].snap=1;sfx.door()}   // short version: the door just bursts open
+  if(role==='host')send({t:'dead',k:killer});
+  if(!death){sfx.scream();vib([200,80,300])}
+};
+dyingTick=function(dt){
+  if(death){
+    try{tick(dt)}catch(e){showErr('tick',e);death=null;dyT=0;$('hud').style.display='none'}
+    return;
+  }
+  dyT+=dt;                                           // short version (the monster caught someone else): turn to face it
+  const mo=mons[killer]||mons[0],dx=mo.x-me.x,dz=mo.z-me.z,ty=Math.atan2(-dx,-dz);
+  me.yaw+=Math.atan2(Math.sin(ty-me.yaw),Math.cos(ty-me.yaw))*Math.min(1,dt*10);me.pitch+=(.15-me.pitch)*Math.min(1,dt*6);
+  if(dyT>1.7)showEnd(false,me.hid>=0?'It opened the locker.':(endgame?'So close to the exit.':'You should have kept moving.'));
+};
+const _hud=hud;hud=function(){_hud();if(death&&state==='dying')$('flash').style.opacity=0};
+const _rr=resetRound;resetRound=function(){_rr.apply(null,arguments);reset()};
+})();
+/* ===== END DEATH ANIMATION ===== */
 })();
 </script>
 </body>
