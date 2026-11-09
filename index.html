@@ -1804,7 +1804,8 @@ dyingTick=function(dt){
   if(dyT>1.7)showEnd(false,me.hid>=0?'It opened the locker.':(endgame?'So close to the exit.':'You should have kept moving.'));
 };
 const _hud=hud;hud=function(){_hud();if(death&&state==='dying')$('flash').style.opacity=0};
-const _rr=resetRound;resetRound=function(){_rr.apply(null,arguments);reset()};
+})();
+/* ===== END DEATH ANIMATION ===== */
 
 /* ===== FIX: caught while getting into / out of a locker ===== */
 (()=>{
@@ -1832,14 +1833,126 @@ finishHideIn=after(finishHideIn);
 finishHideOut=after(finishHideOut);
 const _rr=resetRound;resetRound=function(){_rr.apply(null,arguments);pend=null};
 })();
-/* ===== END TEST BUTTON ===== */
-})();
 /* ===== END FIX ===== */
+
+/* ===== LAST STAGE (multiplayer): when someone is eaten the game goes on for the others ===== */
+(()=>{
+let deadMe=false,wantSpec=false,spectating=false,allOver=false,suppress=false,specIdx=0,specT=null,endTimer=0;
+const EAT_MS=7200;                                   // lets the last victim finish watching their own death
+const peersAlive=()=>{let n=0;peers.forEach(p=>{if(p.active&&!p.dead)n++});return n};
+
+/* ---- the "you were eaten" spectator bar ---- */
+const specBox=document.createElement('div');
+specBox.style.cssText='position:fixed;left:0;right:0;bottom:calc(14px + env(safe-area-inset-bottom));z-index:9;text-align:center;display:none;color:#cfd8c4;font:bold 13px "Courier New",monospace;text-shadow:0 0 6px #000';
+specBox.innerHTML='<div id="specLbl" style="margin-bottom:8px"></div><button class="mb sm" id="specNext">NEXT PLAYER</button><button class="mb sm" id="specLeave">LEAVE GAME</button>';
+document.body.appendChild(specBox);
+const specLbl=specBox.querySelector('#specLbl');
+specBox.querySelector('#specNext').onclick=()=>{specIdx++};
+specBox.querySelector('#specLeave').onclick=()=>leaveGame();
+
+/* ---- the dead player's camera follows a friend who is still alive ---- */
+function followCam(){
+  const list=[];peers.forEach(p=>{if(p.active&&!p.dead)list.push(p)});
+  if(!list.length){specT=null;specLbl.textContent='YOU WERE EATEN';return}
+  specIdx=((specIdx%list.length)+list.length)%list.length;
+  const t=list[specIdx];specT=t;
+  me.x=t.x;me.z=t.z;me.yaw=t.yaw;me.pitch=0;animY=t.hid>0?1.5:EYE;
+  flOn=true;batt=100;stam=100;exhausted=false;
+  specLbl.textContent='YOU WERE EATEN - watching P'+(t.id+1);
+}
+function startSpectate(){
+  wantSpec=false;spectating=true;
+  state='play';                                      // keep the game running (on the host the monsters keep hunting the others)
+  mons.forEach(m=>{const r=m.mesh&&m.mesh.userData&&m.mesh.userData.rig;if(!r)return;r.head.scale.setScalar(1);r.armL.sh.rotation.z=0;r.armR.sh.rotation.z=0});
+  [...document.body.children].forEach(e=>{const z=e.style&&e.style.zIndex;if(z==='7'||z==='8')e.style.opacity=0});   // clear the black/red death screens
+  me.hid=-1;hideAnim=null;animY=null;
+  $('flash').style.opacity=0;$('slats').style.display='none';$('hud').style.display='none';
+  specBox.style.display='block';
+}
+
+/* ---- host: who did the monster catch? ---- */
+function whoCaught(k){
+  const mo=mons[k]||mons[0];if(!mo)return null;
+  const cand=[];
+  if(!deadMe)cand.push({p:me,x:me.x,z:me.z,hid:me.hid>=0});
+  peers.forEach(p=>{if(p.active&&!p.dead)cand.push({p,x:p.x,z:p.z,hid:p.hid>0})});
+  for(const pass of [false,true]){                   // players in the open first, hidden ones only if nobody else is close
+    let best=null,bd=3.6;
+    for(const c of cand){if(c.hid!==pass)continue;const d=Math.hypot(c.x-mo.x,c.z-mo.z);if(d<bd){bd=d;best=c.p}}
+    if(best)return best;
+  }
+  return null;
+}
+const _send=send;
+send=function(o,t){if(suppress&&o&&o.t==='dead')return;return _send(o,t)};   // the old "everyone dies" message is blocked while we handle it ourselves
+
+function endAll(){
+  if(state==='over')return;
+  wantSpec=false;spectating=false;specBox.style.display='none';
+  _send({t:'dead',k:0});
+  showEnd(false,'Everyone was eaten.');
+}
+function selfEaten(k){                               // the host got caught
+  if(peersAlive()===0){_die(k);return}               // nobody else is alive: normal ending
+  suppress=true;try{_die(k)}finally{suppress=false}
+  if(state==='dying'){deadMe=true;wantSpec=true;send({t:'gone',id:0})}   // (if the locker door animation is still finishing, we try again next frame)
+}
+function peerEaten(p,k){                             // a friend got caught
+  const last=((deadMe?0:1)+peersAlive())<=1;
+  p.dead=true;p.active=false;if(p.mesh)p.mesh.visible=false;
+  send({t:'eaten',k,last},p.id);                     // only that player plays the death
+  send({t:'gone',id:p.id});                          // everyone else just sees them disappear
+  toast('P'+(p.id+1)+' was eaten!',3000);
+  if(last)endTimer=setTimeout(endAll,EAT_MS);
+}
+const _die=die;
+die=function(k){
+  if(state!=='play'||role!=='host'||!endgame){_die(k);return}   // before the last stage (or solo / guest): exactly as before
+  const w=whoCaught(k);
+  if(w===me)selfEaten(k);else if(w)peerEaten(w,k);else _die(k);
+};
+
+/* ---- everyone: messages ---- */
+const _on=onNet;
+onNet=function(m,from){
+  if(m.t==='eaten'){if(role==='guest'&&state==='play'){deadMe=true;wantSpec=!m.last;die(m.k)}return}
+  if(m.t==='gone'){
+    if(m.id!==me.id){const p=peers.get(m.id);if(p){p.dead=true;p.active=false;if(p.mesh)p.mesh.visible=false;toast('P'+(m.id+1)+' was eaten!',3000)}}
+    return;
+  }
+  if(m.t==='dead'&&deadMe){allOver=true;if(spectating){wantSpec=false;spectating=false;specBox.style.display='none';showEnd(false,'Everyone was eaten.')}return}
+  _on(m,from);
+};
+const _sp=setPeer;setPeer=function(id,a){const p=peers.get(id);if(p&&p.dead)return;_sp(id,a)};   // a dead player's position updates are ignored
+
+/* ---- the end screen only shows when it is really over ---- */
+const _showEnd=showEnd;
+showEnd=function(win,msg){
+  if(wantSpec&&!allOver&&!win&&!/Lost connection/.test(msg||'')){startSpectate();return}
+  spectating=false;wantSpec=false;specBox.style.display='none';
+  _showEnd(win,msg);
+};
+
+/* ---- a dead player only watches ---- */
+const _ai=monsterAI;
+monsterAI=function(dt){                              // host: keep the monsters running, but treat the dead host as safely hidden
+  if(!deadMe){_ai(dt);return}
+  const s=state,h=me.hid;state='play';me.hid=999;
+  try{_ai(dt)}finally{state=s;me.hid=h}
+};
+const _mp=movePlayer;movePlayer=function(dt){if(deadMe&&spectating){followCam();return}_mp(dt)};
+const _pk=pickups;pickups=function(){if(!(deadMe&&spectating))_pk()};
+const _du=doUse;doUse=function(){if(!deadMe)_du()};
+const _tl=toggleLight;toggleLight=function(){if(!deadMe)_tl()};
+const _us=useScan;useScan=function(){if(!deadMe)_us()};
+const _uc=updateCamera;updateCamera=function(){if(deadMe&&spectating&&specT&&specT.mesh)specT.mesh.visible=false;_uc()};   // you look through their eyes, so hide their body
+const _rr=resetRound;resetRound=function(){
+  _rr.apply(null,arguments);
+  deadMe=false;wantSpec=false;spectating=false;allOver=false;suppress=false;specT=null;specIdx=0;clearTimeout(endTimer);specBox.style.display='none';
+};
 })();
-/* ===== END DEBUG ADD-ON ===== */
-})();
-/* ===== END DEATH ANIMATION ===== */
+/* ===== END LAST STAGE (multiplayer) ===== */
 })();
 </script>
 </body>
-                                          </html>
+  </html>
