@@ -1857,6 +1857,23 @@ const after=orig=>function(a,l){
 finishHideIn=after(finishHideIn);
 finishHideOut=after(finishHideOut);
 const _rr=resetRound;resetRound=function(){_rr.apply(null,arguments);pend=null};
+  /* ===== TEST BUTTON: skip straight to the last phase ===== */
+(()=>{
+const b=document.createElement('button');b.className='mb sm';b.textContent='TEST: SKIP TO LAST PHASE';
+$('pause').appendChild(b);
+b.onclick=()=>{
+  setPause(false);
+  if(state!=='play'||endgame||!fuses.length)return;
+  if(role==='guest'){toast('Only the host can skip to the last phase.',2200);return}
+  fuses.forEach((f,i)=>{                      // place every fuse silently
+    f.st=2;f.by=-1;f.mesh.visible=false;f.frame.visible=false;
+    const s=sockets[i];if(s){s.beam.visible=false;s.ring.visible=false;s.core.material.color.set(0x44ff88)}
+  });
+  recount();
+  startEndgame();                              // exit lights up, monsters always know where you are
+};
+})();
+/* ===== END TEST BUTTON ===== */
 })();
 /* ===== END FIX ===== */
 })();
