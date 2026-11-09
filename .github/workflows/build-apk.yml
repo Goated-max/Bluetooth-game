@@ -362,6 +362,23 @@ jobs:
               }
           }
           EOF
+      - name: Cache the Gradle download
+        uses: actions/cache@v4
+        with:
+          path: ~/.gradle/wrapper/dists
+          key: gradle-wrapper-8.2.1
+
+      - name: Download Gradle (retries if GitHub is having a problem)
+        working-directory: android
+        run: |
+          chmod +x ./gradlew
+          for i in 1 2 3 4 5 6; do
+            if ./gradlew --version; then exit 0; fi
+            echo "Gradle download failed (attempt $i of 6), waiting 30s..."
+            sleep 30
+          done
+          echo "::error::Could not download Gradle after 6 attempts. GitHub is probably having an outage, so re-run in a few minutes."
+          exit 1
 
       - name: Build APK (with Bluetooth)
         id: build_bt
