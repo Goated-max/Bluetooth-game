@@ -1816,6 +1816,33 @@ tb.onclick=()=>{
   mo.x=me.x+fx*1.2;mo.z=me.z+fz*1.2;mo.ry=Math.atan2(-fx,-fz);
   mo.mesh.position.set(mo.x,0,mo.z);mo.mesh.rotation.y=mo.ry;
   die(0);
+ /* ===== FIX: caught while getting into / out of a locker ===== */
+(()=>{
+let pend=null;
+const _die=die;
+die=function(k){
+  if(state!=='play')return;
+  if(hideAnim){pend=k;return}                 // wait until the locker door animation is finished
+  _die(k);
+};
+const after=orig=>function(a,l){
+  orig(a,l);
+  if(pend===null)return;
+  const k=pend;pend=null;
+  const mo=mons[k]||mons[0],L=me.hid>=0?lockers[me.hid]:null;
+  if(mo&&L&&Math.hypot(mo.x-me.x,mo.z-me.z)>3.2){   // monster is too far away: put it in front of the locker
+    for(const c of [2.8,2.4,2.1]){
+      const x=L.x+L.fx*c,z=L.z+L.fz*c;
+      if(!blocked(x,z,.3)){mo.x=x;mo.z=z;mo.ry=Math.atan2(-L.fx,-L.fz);mo.mesh.position.set(x,0,z);mo.mesh.rotation.y=mo.ry;break}
+    }
+  }
+  die(k);
+};
+finishHideIn=after(finishHideIn);
+finishHideOut=after(finishHideOut);
+const _rr=resetRound;resetRound=function(){_rr.apply(null,arguments);pend=null};
+})();
+/* ===== END FIX ===== */
 };
 })();
 /* ===== END DEBUG ADD-ON ===== */
