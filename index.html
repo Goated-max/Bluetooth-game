@@ -1952,6 +1952,33 @@ const _rr=resetRound;resetRound=function(){
 };
 })();
 /* ===== END LAST STAGE (multiplayer) ===== */
+  /* ===== RESTART SAFETY: if a new round fails to start on a joined player's device, show why and retry ===== */
+(()=>{
+const bar=document.createElement('div');
+bar.style.cssText='position:fixed;left:0;right:0;top:0;z-index:99;background:#a00;color:#fff;font:12px monospace;padding:6px;display:none;white-space:pre-wrap;pointer-events:none';
+document.body.appendChild(bar);
+const say=t=>{bar.style.display='block';bar.textContent=t};
+const healthy=()=>!!(scene&&camera&&mons.length&&Number.isFinite(me.x)&&Number.isFinite(me.z)&&(state==='play'||state==='dying'||$('end').style.display==='flex'));
+const _on=onNet;
+onNet=function(m,from){
+  if(m.t!=='restart'){_on(m,from);return}
+  let tries=0;
+  const attempt=()=>{
+    tries++;
+    try{_on(m,from)}catch(e){say('Restart error (try '+tries+'): '+((e&&e.message)||e))}
+    setTimeout(()=>{
+      if(healthy()){
+        if(renderer&&camera){renderer.setSize(innerWidth,innerHeight);camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix()}
+        setTimeout(()=>{bar.style.display='none'},6000);
+        return;
+      }
+      if(tries<3)attempt();else say('The new round would not start. Tap LEAVE GAME and join again.\n(last state: '+state+')');
+    },1200);
+  };
+  attempt();
+};
+})();
+/* ===== END RESTART SAFETY ===== */
 })();
 </script>
 </body>
