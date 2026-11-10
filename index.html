@@ -2001,7 +2001,74 @@ setInterval(()=>{
 },300);
 })();
 /* ===== END DIAGNOSE ===== */
+  // Event listener for the "TRY AGAIN" button
+  const retryBtn = document.getElementById('bRetry');
+  if (retryBtn) {
+    retryBtn.addEventListener('click', () => {
+      // 1. Hide the game over screen and show the HUD
+      const endOverlay = document.getElementById('end');
+      const hudOverlay = document.getElementById('hud');
+      if (endOverlay) endOverlay.style.display = 'none';
+      if (hudOverlay) hudOverlay.style.display = 'block';
+
+      // 2. Reset player state variables
+      state = 'play';
+      endgame = false;
+      carry = -1;
+      fuseCount = 0;
+      batt = 100;
+      stam = 100;
+      exhausted = false;
+      killer = 0;
+      dyT = 0;
+
+      // 3. Remove old 3D objects from the scene
+      if (typeof scene !== 'undefined' && scene) {
+        fuses.forEach(f => f.mesh && scene.remove(f.mesh));
+        sockets.forEach(s => s.mesh && scene.remove(s.mesh));
+        batts.forEach(b => b.mesh && scene.remove(b.mesh));
+        lockers.forEach(l => l.mesh && scene.remove(l.mesh));
+        mons.forEach(m => m.mesh && scene.remove(m.mesh));
+      }
+      fuses.length = 0;
+      sockets.length = 0;
+      batts.length = 0;
+      lockers.length = 0;
+      mons.length = 0;
+
+      // 4. Generate a fresh maze seed and layout
+      genMaze(Date.now());
+      const l = layout();
+
+      // 5. Reset player coordinates to spawn
+      me.x = tc(1);
+      me.z = tc(1);
+      me.yaw = 0;
+      me.pitch = 0;
+      me.hid = -1;
+
+      // 6. Restart the rendering loop if it stopped
+      if (!looping) {
+        looping = true;
+        if (typeof clock !== 'undefined' && clock) clock.start();
+        if (typeof animate === 'function') animate();
+      }
+    });
+  }
+
+  // Event listener for the "BACK TO MENU" button
+  const menuBtn = document.getElementById('bMenu');
+  if (menuBtn) {
+    menuBtn.addEventListener('click', () => {
+      const endOverlay = document.getElementById('end');
+      const menuOverlay = document.getElementById('menu');
+      if (endOverlay) endOverlay.style.display = 'none';
+      if (menuOverlay) menuOverlay.style.display = 'flex';
+      state = 'menu';
+      looping = false;
+    });
+  }
 })();
 </script>
 </body>
-  </html>
+      </html>
