@@ -1979,7 +1979,7 @@ onNet=function(m,from){
 };
 })();
 /* ===== END RESTART SAFETY ===== */
-  /* ===== DIAGNOSE v2: shows what is on screen after a restart (remove later) ===== */
+  /* ===== DIAGNOSE v3: finds out why the new round shows the old maze (remove later) ===== */
 (()=>{
 const bar=document.createElement('div');
 bar.style.cssText='position:fixed;left:0;right:0;top:0;z-index:99;background:#a00;color:#fff;font:12px monospace;padding:6px;display:none;white-space:pre-wrap;pointer-events:none';
@@ -1992,11 +1992,14 @@ const _ce=console.error,_cw=console.warn;
 console.error=function(){add('console.error: '+[].slice.call(arguments).join(' '));return _ce.apply(console,arguments)};
 console.warn=function(){add('console.warn: '+[].slice.call(arguments).join(' '));return _cw.apply(console,arguments)};
 addEventListener('error',e=>add('error: '+e.message));
-addEventListener('unhandledrejection',e=>add('promise: '+((e.reason&&e.reason.message)||e.reason)));
 const overlays=()=>[...document.body.children].filter(e=>e.style&&(e.style.zIndex==='7'||e.style.zIndex==='8'));
-const sweep=()=>overlays().forEach(e=>{e.style.opacity=0});          // the black / red death screens must never stay on during play
+const sweep=()=>overlays().forEach(e=>{e.style.opacity=0});
+/* fingerprint of the wall tiles the collision map says exist, and of the wall boxes that are really in the 3D scene */
+const gridHash=()=>{let h=0,c=0;for(let z=0;z<GW;z++)for(let x=0;x<GW;x++){if(grid[z][x]!==1)continue;let vis=false;for(let dz=-1;dz<=1&&!vis;dz++)for(let dx=-1;dx<=1;dx++){if(grid[z+dz]&&grid[z+dz][x+dx]===0){vis=true;break}}if(vis){h=(h+x*131+z*7919)%1000003;c++}}return [h,c]};
+const sceneHash=()=>{let h=0,c=0;if(scene)scene.traverse(o=>{if(o.isInstancedMesh){const a=o.instanceMatrix.array;for(let i=0;i<o.count;i++){const x=Math.round(a[i*16+12]/T-.5),z=Math.round(a[i*16+14]/T-.5);h=(h+x*131+z*7919)%1000003;c++}}});return [h,c]};
+const refresh=()=>{try{if(renderer&&renderer.resetState)renderer.resetState();if(scene)scene.traverse(o=>{if(o.isInstancedMesh)o.instanceMatrix.needsUpdate=true})}catch(e){add('refresh: '+e.message)}};
 const _br=beginRound;
-beginRound=function(){msgs.length=0;bar.style.display='none';watch=Date.now()+12000;try{_br.apply(null,arguments)}catch(e){add('beginRound: '+((e&&e.message)||e))}sweep()};
+beginRound=function(){msgs.length=0;bar.style.display='none';watch=Date.now()+15000;try{_br.apply(null,arguments)}catch(e){add('beginRound: '+((e&&e.message)||e))}sweep();refresh()};
 const _up=update;
 update=function(dt){try{_up(dt)}catch(e){add('update: '+((e&&e.message)||e))}};
 const _loop=loop;
@@ -2004,16 +2007,13 @@ loop=function(){try{_loop()}catch(e){add('draw: '+((e&&e.message)||e))}};
 setInterval(()=>{
   if(state==='play')sweep();
   if(Date.now()>watch){st.textContent='';return}
-  const gl=renderer&&renderer.getContext&&renderer.getContext(),inf=renderer&&renderer.info&&renderer.info.render;
-  const op=overlays().map(e=>e.style.zIndex+':'+(e.style.opacity||'0')).join(' ');
-  st.textContent='state='+state+' scene='+(scene?scene.children.length:'none')+' mons='+mons.length+' fl='+flOn+' uFlI='+(+FLU.uFlI.value).toFixed(2)
-   +'\ncam='+(camera?[camera.position.x,camera.position.y,camera.position.z].map(v=>v.toFixed(1)).join(','):'none')+' yaw='+me.yaw.toFixed(2)+' pitch='+me.pitch.toFixed(2)
-   +'\ndrawcalls='+(inf?inf.calls:'?')+' tris='+(inf?inf.triangles:'?')+' canvas='+$('view').width+'x'+$('view').height
-   +'\noverlays '+op+' end='+$('end').style.display+' slats='+$('slats').style.display+' hud='+$('hud').style.display
-   +(gl&&gl.isContextLost&&gl.isContextLost()?'\nWEBGL CONTEXT LOST':'');
+  const inf=renderer&&renderer.info&&renderer.info.render,hs=sceneHash(),hg=gridHash();
+  st.textContent='state='+state+' scene='+(scene?scene.children.length:'none')+' mons='+mons.length+' uFlI='+(+FLU.uFlI.value).toFixed(2)+' drawcalls='+(inf?inf.calls:'?')
+   +'\nwalls in 3D scene: '+hs[1]+' (code '+hs[0]+')   walls in collision map: '+hg[1]+' (code '+hg[0]+')'
+   +'\n'+(hs[0]===hg[0]&&hs[1]===hg[1]?'3D SCENE MATCHES THE COLLISION MAP':'*** MISMATCH: 3D scene and collision map are different mazes ***');
 },300);
 })();
-/* ===== END DIAGNOSE v2 ===== */
+/* ===== END DIAGNOSE v3 ===== */
   // Event listener for the "TRY AGAIN" button
   const retryBtn = document.getElementById('bRetry');
   if (retryBtn) {
