@@ -1804,6 +1804,7 @@ dyingTick=function(dt){
   if(dyT>1.7)showEnd(false,me.hid>=0?'It opened the locker.':(endgame?'So close to the exit.':'You should have kept moving.'));
 };
 const _hud=hud;hud=function(){_hud();if(death&&state==='dying')$('flash').style.opacity=0};
+const _rr=resetRound;resetRound=function(){_rr.apply(null,arguments);reset()};
 })();
 /* ===== END DEATH ANIMATION ===== */
 
@@ -1978,42 +1979,7 @@ onNet=function(m,from){
   attempt();
 };
 })();
-/* ===== END RESTART SAFETY ===== */
-  /* ===== DIAGNOSE v4: logs exactly what happens when a round restarts (remove later) ===== */
-(()=>{
-const bar=document.createElement('div');
-bar.style.cssText='position:fixed;left:0;right:0;top:0;z-index:99;background:#a00;color:#fff;font:12px monospace;padding:6px;display:none;white-space:pre-wrap;pointer-events:none';
-const st=document.createElement('div');
-st.style.cssText='position:fixed;left:6px;bottom:6px;z-index:98;color:#7f7;font:10px monospace;pointer-events:none;white-space:pre;text-shadow:0 0 3px #000;background:rgba(0,0,0,.35)';
-document.body.appendChild(bar);document.body.appendChild(st);
-const msgs=[],log=[];let watch=0;const t0=Date.now();
-const add=m=>{if(msgs.length<3){msgs.push(String(m).slice(0,300));bar.style.display='block';bar.textContent=msgs.join('\n---\n')}};
-const ev=s=>{log.push(((Date.now()-t0)/1000).toFixed(1)+'s '+s);if(log.length>12)log.shift()};
-const _ce=console.error,_cw=console.warn;
-console.error=function(){add('console.error: '+[].slice.call(arguments).join(' '));return _ce.apply(console,arguments)};
-console.warn=function(){add('console.warn: '+[].slice.call(arguments).join(' '));return _cw.apply(console,arguments)};
-addEventListener('error',e=>add('error: '+e.message));
-const overlays=()=>[...document.body.children].filter(e=>e.style&&(e.style.zIndex==='7'||e.style.zIndex==='8'));
-const sweep=()=>overlays().forEach(e=>{e.style.opacity=0});
-const gridHash=()=>{let h=0,c=0;for(let z=0;z<GW;z++)for(let x=0;x<GW;x++){if(!grid||grid[z][x]!==1)continue;let vis=false;for(let dz=-1;dz<=1&&!vis;dz++)for(let dx=-1;dx<=1;dx++){if(grid[z+dz]&&grid[z+dz][x+dx]===0){vis=true;break}}if(vis){h=(h+x*131+z*7919)%1000003;c++}}return h+'/'+c};
-const sceneInfo=()=>{const out=[];if(scene)scene.traverse(o=>{if(o.isInstancedMesh){let h=0;const a=o.instanceMatrix.array;for(let i=0;i<o.count;i++){const x=Math.round(a[i*16+12]/T-.5),z=Math.round(a[i*16+14]/T-.5);h=(h+x*131+z*7919)%1000003}out.push(h+'/'+o.count)}});return out};
-const _gm=genMaze;genMaze=function(seed){ev('genMaze seed='+seed+' players='+nPlayers);return _gm.apply(null,arguments)};
-const _bw=buildWorld;buildWorld=function(){ev('buildWorld...');try{_bw.apply(null,arguments)}catch(e){ev('buildWorld THREW '+((e&&e.message)||e));throw e}ev('buildWorld done: 3D='+sceneInfo().join(',')+' grid='+gridHash())};
-const _rs=resetRound;resetRound=function(){ev('resetRound');return _rs.apply(null,arguments)};
-const _br=beginRound;
-beginRound=function(seed,r){ev('beginRound '+r);msgs.length=0;bar.style.display='none';watch=Date.now()+20000;try{_br.apply(null,arguments)}catch(e){add('beginRound: '+((e&&e.message)||e));ev('beginRound THREW')}sweep();ev('beginRound end state='+state)};
-const _up=update;update=function(dt){try{_up(dt)}catch(e){add('update: '+((e&&e.message)||e))}};
-const _loop=loop;loop=function(){try{_loop()}catch(e){add('draw: '+((e&&e.message)||e))}};
-let lastMatch=null;
-setInterval(()=>{
-  if(state==='play')sweep();
-  const si=sceneInfo(),g=gridHash(),match=si.length===1&&si[0]===g;
-  if(lastMatch!==null&&match!==lastMatch)ev(match?'now MATCHING':'now MISMATCH');lastMatch=match;
-  if(Date.now()>watch){st.textContent='';return}
-  st.textContent=log.join('\n')+'\nNOW: 3D='+si.join(',')+' collision='+g+' '+(match?'(match)':'(MISMATCH)')+' meshes='+si.length;
-},300);
-})();
-/* ===== END DIAGNOSE v4 ===== */
+/* ===== END RESTART SAFETY ===== *
   /* ===== FIX: ignore stray maze regeneration while a round is running ===== */
 (()=>{
 const _gm=genMaze;
