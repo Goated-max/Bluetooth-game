@@ -204,6 +204,7 @@ jobs:
                   try {
                       if (adapter == null) adapter = BluetoothAdapter.getDefaultAdapter();
                       closeServer();
+                      stopDiscovery();
                       final BluetoothServerSocket srv = adapter.listenUsingInsecureRfcommWithServiceRecord("HollowHalls", APP_UUID);
                       server = srv;
                       Intent d = new Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE);
@@ -290,33 +291,56 @@ jobs:
               }
 
               private void attach(final BluetoothSocket s, final int id) throws IOException {
-                  final Conn c = new Conn();
-                  c.id = id;
-                  c.sock = s;
-                  c.out = s.getOutputStream();
-                  final InputStream in = s.getInputStream();
-                  conns.put(id, c);
-                  JSObject o = new JSObject();
-                  o.put("id", id);
-                  notifyListeners("connected", o);
-                  new Thread(() -> {
-                      byte[] buf = new byte[1024];
-                      try {
-                          int n;
-                          while ((n = in.read(buf)) > 0) {
-                              JSObject d = new JSObject();
-                              d.put("id", id);
-                              d.put("data", new String(buf, 0, n, StandardCharsets.UTF_8));
-                              notifyListeners("data", d);
-                          }
-                      } catch (IOException ignored) {}
-                      conns.remove(id);
-                      try { s.close(); } catch (IOException ignored) {}
-                      JSObject cl = new JSObject();
-                      cl.put("id", id);
-                      notifyListeners("closed", cl);
-                  }).start();
-              }
+    final Conn c = new Conn();
+    c.id = id;
+    c.sock = s;
+    c.out = s.getOutputStream();
+    final InputStream in = s.getInputStream();
+    conns.put(id, c);
+
+    // Scanning competes with the live link for radio time, so stop it once connected
+    stopDiscovery();
+
+    JSObject o = new JSObject();
+    o.put("id", id);
+    notifyListeners("connected", o);
+
+    new Thread(() -> {
+        byte[] buf = new byte[4096];
+        java.io.ByteArrayOutputStream pending = new java.io.ByteArrayOutputStream();
+        try {
+            int n;
+            while ((n = in.read(buf)) > 0) {
+                StringBuilder batch = new StringBuilder();
+                for (int k = 0; k < n; k++) {
+                    if (buf[k] == '\n') {
+                        // Decode only complete lines, so multi-byte characters are never split
+                        batch.append(pending.toString(StandardCharsets.UTF_8)).append('\n');
+                        pending.reset();
+                    } else {
+                        if (pending.size() < 65536) pending.write(buf[k]); // guard against runaway data
+                    }
+                }
+                if (batch.length() > 0) {
+                    JSObject d = new JSObject();
+                    d.put("id", id);
+                    d.put("data", batch.toString());   // one event carries every complete line in this read
+                    notifyListeners("data", d);
+                }
+            }
+        } catch (IOException ignored) {}
+        conns.remove(id);
+        try { s.close(); } catch (IOException ignored) {}
+        JSObject cl = new JSObject();
+        cl.put("id", id);
+        notifyListeners("closed", cl);
+    }).start();
+}
+
+private void stopDiscovery() {
+    try { if (adapter != null && adapter.isDiscovering()) adapter.cancelDiscovery(); } catch (Exception ignored) {}
+}
+
 
               // id < 0 (or missing) = broadcast to every connection
               @PluginMethod
