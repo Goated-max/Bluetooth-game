@@ -2337,7 +2337,7 @@ function shiftTick(dt){
   if(state!=='dying'){                                           // no flashlight: the store lights decide what you see
     if(dread!==SH.dreadOn){SH.dreadOn=dread;hum(dread);if(musicBus&&AC)musicBus.gain.setTargetAtTime(dread?0:(SET.music?.55:0),AC.currentTime,.3)}
     FLU.uFlI.value=0;
-    let amb=inB?(SH.late?.05:.14):(SH.late?.12:.6);
+    let amb=inB?.02:(SH.late?.3:1);
     if(SH.lightsOut>0)amb=0;
     FLU.uAmb.value=amb;
     if(scene&&scene.fog)scene.fog.density=SH.late?.06:(inB?.07:.02);
@@ -2503,6 +2503,117 @@ row2.appendChild(mkBtn('NIGHT SHIFT: SOLO',()=>{SH.pending=true;initAudio();net.
 row2.appendChild(mkBtn('NIGHT SHIFT: CO-OP',()=>{SH.pending=true;$('coop').style.display='block'}));
 row.parentNode.insertBefore(info,row.nextSibling);row.parentNode.insertBefore(row2,info.nextSibling);
 ['bSolo','bCoop'].forEach(id=>{const b=$(id),h=b.onclick;b.onclick=()=>{SH.pending=false;h()}});
+/* ===== BASEMENT: stairs down, bulb-lit basement, stocked aisles ===== */
+const DROP=2.4, STAIR_Z0=BASE_Z-T;   // stairs run from z=48 down to the basement floor at z=52
+const groundAt=(x,z)=>{
+  if(!SH.on)return 0;
+  if(z>=BASE_Z)return -DROP;
+  if(z<=STAIR_Z0)return 0;
+  return -DROP*(z-STAIR_Z0)/T;
+};
+const BULB_V=Array.from({length:12},()=>new THREE.Vector3());  // bulbs in view space, refreshed each frame
+let BULB_W=[];                                                  // bulbs in world space
+FLU.uBV={value:BULB_V};FLU.uBN={value:0};
+
+/* each basement bulb adds a warm pool of light; in the basement only the bulbs light the room */
+const _hf=hookFl;
+hookFl=function(sh){
+  _hf(sh);
+  sh.uniforms.uBV=FLU.uBV;sh.uniforms.uBN=FLU.uBN;
+  sh.fragmentShader=sh.fragmentShader
+    .replace('float flShade(){','uniform vec3 uBV[12];\nuniform float uBN;\nvec3 bulbLight(){vec3 c=vec3(0.);for(int i=0;i<12;i++){if(float(i)>=uBN)break;vec3 d=vFlPos-uBV[i];c+=vec3(1.,.78,.38)*(1.7/(1.+dot(d,d)*.45));}return c;}\nfloat flShade(){')
+    .replace('vec3 outgoingLight = reflectedLight.indirectDiffuse * flShade();','vec3 outgoingLight = reflectedLight.indirectDiffuse * (vec3(flShade()) + bulbLight());');
+};
+
+/* build the stairs, the basement, its bulbs, store boxes, and lower the things that live down there */
+const _bw2=buildWorld;
+buildWorld=function(){
+  _bw2();
+  if(!SH.on)return;
+  const W=GW*T;
+  const oldW=scene.children.find(o=>o.isInstancedMesh&&o.geometry.parameters&&o.geometry.parameters.height===WALL_H);
+  const oldF=scene.children.find(o=>o.isMesh&&o.geometry.parameters&&o.geometry.parameters.width===W&&o.rotation.x===-Math.PI/2);
+  const oldC=scene.children.find(o=>o.isMesh&&o.geometry.parameters&&o.geometry.parameters.width===W&&o.rotation.x===Math.PI/2);
+  const dm=new THREE.Object3D();
+
+  // walls: rebuilt so the basement walls reach down to the basement floor
+  const spots=[];
+  for(let z=0;z<GW;z++)for(let x=0;x<GW;x++){
+    if(grid[z][x]!==1)continue;let vis=false;
+    for(let dz=-1;dz<=1&&!vis;dz++)for(let dx=-1;dx<=1;dx++){if(grid[z+dz]&&grid[z+dz][x+dx]===0){vis=true;break}}
+    if(vis)spots.push([x,z]);
+  }
+  const nw=new THREE.InstancedMesh(new THREE.BoxGeometry(T,WALL_H,T),oldW.material,spots.length);
+  spots.forEach(([x,z],i)=>{
+    const bot=z>=12?-DROP:0, top=z>=13?WALL_H-DROP:WALL_H;
+    dm.position.set(tc(x),(top+bot)/2,tc(z));dm.scale.set(1,(top-bot)/WALL_H,1);dm.updateMatrix();nw.setMatrixAt(i,dm.matrix);
+  });
+  nw.frustumCulled=false;scene.remove(oldW);scene.add(nw);
+
+  // floors and ceilings: the store floor stops at the stairs, the basement sits lower
+  scene.remove(oldF);
+  const sf=new THREE.Mesh(new THREE.PlaneGeometry(W,STAIR_Z0),oldF.material);
+  sf.rotation.x=-Math.PI/2;sf.position.set(W/2,0,STAIR_Z0/2);scene.add(sf);
+  const bf=new THREE.Mesh(new THREE.PlaneGeometry(W,W-BASE_Z),oldF.material);
+  bf.rotation.x=-Math.PI/2;bf.position.set(W/2,-DROP,BASE_Z+(W-BASE_Z)/2);scene.add(bf);
+  const bc=new THREE.Mesh(new THREE.PlaneGeometry(W,W-BASE_Z),oldC.material);
+  bc.rotation.x=Math.PI/2;bc.position.set(W/2,WALL_H-DROP,BASE_Z+(W-BASE_Z)/2);scene.add(bc);
+
+  // the stairs: five steps from the store floor down to the basement floor
+  const stairMat=mkMat({color:0x6b6358});
+  for(let i=0;i<5;i++){
+    const top=-DROP*i/4+.01, z0=STAIR_Z0+i*T/5;
+    const s=new THREE.Mesh(new THREE.BoxGeometry(T-.2,top+DROP,T/5),stairMat);
+    s.position.set(tc(12),(top-DROP)/2,z0+T/10);scene.add(s);
+  }
+
+  // basement bulbs: small yellow bulbs hanging from the ceiling, the only light down there
+  BULB_W=[];
+  for(const z of [15,19,23])for(const x of [3,7,11,15,19]){if(BULB_W.length<12&&grid[z][x]===0)BULB_W.push([x,z])}
+  const bulbMat=new THREE.MeshBasicMaterial({color:0xffe27a});
+  const bulbG=new THREE.SphereGeometry(.09,8,6);
+  BULB_W=BULB_W.map(([x,z])=>{const v=new THREE.Vector3(tc(x),WALL_H-DROP-.14,tc(z));const m=new THREE.Mesh(bulbG,bulbMat);m.position.copy(v);scene.add(m);return v});
+  FLU.uBN.value=BULB_W.length;
+
+  // things that live in the basement sit on the lower floor
+  SH.tasks.forEach(t=>{if(t.mesh)t.mesh.position.y+=groundAt(t.x,t.z)});
+  batts.forEach(b=>{if(b.mesh)b.mesh.position.y+=groundAt(b.x,b.z)});
+  lockers.forEach(l=>{if(l.door&&l.door.parent)l.door.parent.position.y=groundAt(l.x,l.z)});
+
+  // store aisles: stacked cardboard boxes (also blocks movement, same on every device)
+  const cells=[];
+  for(let z=1;z<=11;z++)for(let x=1;x<=23;x++){
+    if(grid[z][x]!==0)continue;
+    if((x*7+z*3)%4!==0)continue;
+    if(x<=2&&z<=2)continue;
+    if((x===3&&z===10)||(x===22&&z===2))continue;
+    if(Math.abs(x-12)+Math.abs(z-12)<=2)continue;
+    if(SH.tasks.some(t=>Math.abs(t.tx-x)+Math.abs(t.tz-z)<=1))continue;
+    cells.push([x,z]);
+  }
+  const cm=new THREE.InstancedMesh(new THREE.BoxGeometry(.9,.9,.9),mkMat({color:0xb08a55}),cells.length*2);
+  let n=0;
+  cells.forEach(([x,z])=>{
+    const h=(x*31+z*17)%3===0?2:1;
+    for(let k=0;k<h;k++){dm.position.set(tc(x)+((x+z)%2)*.12,.45+.9*k,tc(z));dm.scale.set(1,1,1);dm.updateMatrix();cm.setMatrixAt(n++,dm.matrix)}
+    grid[z][x]=1;
+  });
+  cm.count=n;cm.frustumCulled=false;scene.add(cm);
+};
+
+/* every frame: monsters and players follow the floor, the camera drops down the stairs, bulbs follow the camera */
+const _upd2=update;
+update=function(dt){
+  _upd2(dt);
+  if(SH.on){
+    mons.forEach(mo=>{if(mo.mesh)mo.mesh.position.y=groundAt(mo.mesh.position.x,mo.mesh.position.z)});
+    peers.forEach(p=>{if(p.mesh)p.mesh.position.y=groundAt(p.x,p.z)});
+    camera.position.y+=groundAt(me.x,me.z);
+    camera.updateMatrixWorld();
+    BULB_W.forEach((v,i)=>BULB_V[i].copy(v).applyMatrix4(camera.matrixWorldInverse));
+  }
+  FLU.uBN.value=SH.on?BULB_W.length:0;
+};
 })();
 /* ===== END NIGHT SHIFT ===== */
 })();
