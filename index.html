@@ -2580,38 +2580,75 @@ buildWorld=function(){
   batts.forEach(b=>{if(b.mesh)b.mesh.position.y+=groundAt(b.x,b.z)});
   lockers.forEach(l=>{if(l.door&&l.door.parent)l.door.parent.position.y=groundAt(l.x,l.z)});
 
-  // store aisles: stacked cardboard boxes (also blocks movement, same on every device)
-  const cells=[];
-  for(let z=1;z<=11;z++)for(let x=1;x<=23;x++){
-    if(grid[z][x]!==0)continue;
-    if((x*7+z*3)%4!==0)continue;
-    if(x<=2&&z<=2)continue;
-    if((x===3&&z===10)||(x===22&&z===2))continue;
-    if(Math.abs(x-12)+Math.abs(z-12)<=2)continue;
-    if(SH.tasks.some(t=>Math.abs(t.tx-x)+Math.abs(t.tz-z)<=1))continue;
-    cells.push([x,z]);
+  
+  // store shelves: racks along the aisles, stocked with tiny coloured boxes (some slots stay empty)
+  const PAL=[0xd9574a,0x4a8fd9,0xe8c547,0x5fbf6a,0xb06ad9,0xeeeeee];
+  const DIRS4=[[1,0],[-1,0],[0,1],[0,-1]];
+  const rackFrames=[], rackBoxes=PAL.map(()=>[]);
+  const put=(list,x,z,dx,dz,nOff,tOff,y,sN,sH,sT)=>{
+    list.push(dx!==0?[tc(x)+dx*nOff,y,tc(z)+tOff,sN,sH,sT]:[tc(x)+tOff,y,tc(z)+dz*nOff,sT,sH,sN]);
+  };
+  for(const x of [3,7,11,15,19])for(let z=3;z<=9;z++){
+    if(grid[z][x]!==1)continue;
+    for(const [dx,dz] of DIRS4){
+      if(!grid[z+dz]||grid[z+dz][x+dx]!==0||z+dz>11)continue;
+      put(rackFrames,x,z,dx,dz,T/2-.02,0,1.45,.04,2.9,T-.3);   // backing panel against the shelf wall
+      for(let p=0;p<4;p++){
+        const py=.5+p*.6;
+        put(rackFrames,x,z,dx,dz,T/2+.21,0,py,.42,.06,T-.3);    // shelf plank jutting into the aisle
+        for(let s=0;s<4;s++){
+          if((x*5+z*3+p*7+s*11)%5===0)continue;                 // some slots stay empty
+          put(rackBoxes[(x+z+p+s)%PAL.length],x,z,dx,dz,T/2+.21,-1.2+s*.8,py+.18,.26,.3,.3);
+        }
+      }
+    }
   }
-  const cm=new THREE.InstancedMesh(new THREE.BoxGeometry(.9,.9,.9),mkMat({color:0xb08a55}),cells.length*2);
-  let n=0;
-  cells.forEach(([x,z])=>{
-    const h=(x*31+z*17)%3===0?2:1;
-    for(let k=0;k<h;k++){dm.position.set(tc(x)+((x+z)%2)*.12,.45+.9*k,tc(z));dm.scale.set(1,1,1);dm.updateMatrix();cm.setMatrixAt(n++,dm.matrix)}
-    grid[z][x]=1;
+  const dmx=new THREE.Object3D();
+  const place=(im,arr)=>{arr.forEach(([x,y,z,sx,sy,sz],i)=>{dmx.position.set(x,y,z);dmx.scale.set(sx,sy,sz);dmx.updateMatrix();im.setMatrixAt(i,dmx.matrix)})};
+  const unit=new THREE.BoxGeometry(1,1,1);
+  if(rackFrames.length){const fm=new THREE.InstancedMesh(unit,mkMat({color:0x44484f}),rackFrames.length);place(fm,rackFrames);fm.frustumCulled=false;scene.add(fm)}
+  rackBoxes.forEach((arr,ci)=>{if(!arr.length)return;const im=new THREE.InstancedMesh(unit,mkMat({color:PAL[ci]}),arr.length);place(im,arr);im.frustumCulled=false;scene.add(im)});
+
+  // restock task: the stock station becomes a shelf unit whose slots fill as the task progresses
+  SH.tasks.forEach(t=>{
+    if(t.kind!=='stock'||!t.mesh)return;
+    t.mesh.clear();
+    const wood=mkMat({color:0x4a4f57});
+    const back=new THREE.Mesh(new THREE.BoxGeometry(1.7,1.9,.05),wood);back.position.set(0,.95,-.22);t.mesh.add(back);
+    t.slots=[];
+    for(let p=0;p<4;p++){
+      const py=.4+p*.45;
+      const plank=new THREE.Mesh(new THREE.BoxGeometry(1.7,.06,.5),wood);plank.position.set(0,py,0);t.mesh.add(plank);
+      for(let s=0;s<4;s++){
+        const c=new THREE.Mesh(new THREE.BoxGeometry(.3,.3,.3),mkMat({color:PAL[(p*4+s)%PAL.length]}));
+        c.position.set(-.6+s*.4,py+.18,0);c.visible=false;t.mesh.add(c);t.slots.push(c);
+      }
+    }
   });
-  cm.count=n;cm.frustumCulled=false;scene.add(cm);
+
+  // no batteries in the shift: no pickups
+  batts.forEach(b=>{b.got=true;if(b.mesh)b.mesh.visible=false});
 };
 
 /* every frame: monsters and players follow the floor, the camera drops down the stairs, bulbs follow the camera */
+const BARS=document.querySelector('.bars');
 const _upd2=update;
 update=function(dt){
   _upd2(dt);
+  const bb=$('bBatt').parentNode;
+  bb.style.display=SH.on?'none':'';
+  bb.previousElementSibling.style.display=SH.on?'none':'';
   if(SH.on){
+    batt=100;   // the flashlight never runs out during a shift
     mons.forEach(mo=>{if(mo.mesh)mo.mesh.position.y=groundAt(mo.mesh.position.x,mo.mesh.position.z)});
     peers.forEach(p=>{if(p.mesh)p.mesh.position.y=groundAt(p.x,p.z)});
     camera.position.y+=groundAt(me.x,me.z);
     camera.updateMatrixWorld();
     BULB_W.forEach((v,i)=>BULB_V[i].copy(v).applyMatrix4(camera.matrixWorldInverse));
-  }
+    SH.tasks.forEach(t=>{if(t.slots){const k=t.done?t.slots.length:Math.floor(t.progress*t.slots.length);t.slots.forEach((c,i)=>{c.visible=i<k})}});
+    const ob=$('obj');
+    BARS.style.top=(ob.offsetTop+ob.offsetHeight+10)+'px';   // stamina bar sits under the task list
+  }else BARS.style.top='';
   FLU.uBN.value=SH.on?BULB_W.length:0;
 };
 })();
