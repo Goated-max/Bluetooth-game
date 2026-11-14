@@ -219,6 +219,19 @@ function bfsPath(sx,sz,tx,tz,fx,fz){
 const wallAt=(x,z)=>{const i=Math.floor(x/T),j=Math.floor(z/T);return !grid[j]||grid[j][i]!==0||(window.doorShut&&window.doorShut(x,z))};
 const blocked=(x,z,r)=>wallAt(x-r,z-r)||wallAt(x+r,z-r)||wallAt(x-r,z+r)||wallAt(x+r,z+r)||lockers.some(l=>Math.abs(x-l.x)<.55+r&&Math.abs(z-l.z)<.55+r);
 function los(ax,az,bx,bz){const dx=bx-ax,dz=bz-az,d=Math.hypot(dx,dz),n=Math.ceil(d/.8);for(let i=1;i<n;i++){const t=i/n;if(wallAt(ax+dx*t,az+dz*t))return false}return true}
+function smoothPath(mo){while(mo.path.length>1&&los(mo.x,mo.z,mo.path[1].x,mo.path[1].z))mo.path.shift()}
+function stepMon(mo,st){
+  if(!mo.path.length)return;
+  const w=mo.path[0],dx=w.x-mo.x,dz=w.z-mo.z,d=Math.hypot(dx,dz);
+  if(d<.05){mo.path.shift();return}
+  const hit=(x,z)=>wallAt(x+.3,z)||wallAt(x-.3,z)||wallAt(x,z+.3)||wallAt(x,z-.3);
+  const s=Math.min(st,d),ux=dx/d*s,uz=dz/d*s;
+  if(!hit(mo.x+ux,mo.z+uz)){mo.x+=ux;mo.z+=uz}
+  else if(!hit(mo.x+ux,mo.z)){mo.x+=ux}
+  else if(!hit(mo.x,mo.z+uz)){mo.z+=uz}
+  else{mo.path.shift();return}
+  mo.ry=Math.atan2(dx,dz);
+}
 function shuffle(a){for(let i=a.length-1;i>0;i--){const j=(rng()*(i+1))|0;[a[i],a[j]]=[a[j],a[i]]}return a}
 function pickCells(list,n,sep){
   const out=[];
@@ -1031,11 +1044,8 @@ function monsterAI(dt){
       const c=layoutOpen[(Math.random()*layoutOpen.length)|0];
       mo.path=bfsPath(mt[0],mt[1],c[0],c[1]);
     }
-    if(mo.path.length){
-      const w=mo.path[0],dx=w.x-mo.x,dz=w.z-mo.z,d=Math.hypot(dx,dz),st=spd*dt;
-      if(d<=st){mo.x=w.x;mo.z=w.z;mo.path.shift()}else{mo.x+=dx/d*st;mo.z+=dz/d*st}
-      if(d>.01)mo.ry=Math.atan2(dx,dz);
-    }
+    smoothPath(mo);
+    stepMon(mo,spd*dt);
     // stuck detector: no real progress for ~1.2s (and not deliberately waiting at a locker) -> pick a fresh route
     mo.wt+=dt;
     if(mo.wt>=1.2){
@@ -2187,11 +2197,8 @@ function shiftAI(dt){
         else{mo.path=bfsPath(mt[0],mt[1],lt[0],lt[1],mo.lk.x,mo.lk.z);if(!mo.path.length||Math.hypot(mo.lk.x-mo.x,mo.lk.z-mo.z)<1.5)mo.arrived=true}
       }
     }else if(!mo.path.length&&!mo.disg){const c=layoutOpen[(Math.random()*layoutOpen.length)|0];mo.path=bfsPath(mt[0],mt[1],c[0],c[1])}
-    if(mo.path.length){
-      const w=mo.path[0],dx=w.x-mo.x,dz=w.z-mo.z,d=Math.hypot(dx,dz),st=spd*dt;
-      if(d<=st){mo.x=w.x;mo.z=w.z;mo.path.shift()}else{mo.x+=dx/d*st;mo.z+=dz/d*st}
-      if(d>.01)mo.ry=Math.atan2(dx,dz);
-    }
+    smoothPath(mo);
+    stepMon(mo,spd*dt);
     mo.wt+=dt;
     if(mo.wt>=1.2){
       if(Math.hypot(mo.x-mo.wx,mo.z-mo.wz)<.4&&(mo.mode!=='hunt'||!mo.arrived)){
@@ -2772,6 +2779,7 @@ update=function(dt){
   WALK=SH.on?7:5;
   SPRINT=WALK*2;
   MONSTER_SPEED=WALK*(SH.on?1.6:1.5);
+  SPD.lurker.h=SPD.mimic.h=SPD.enforcer.h=MONSTER_SPEED;
   _upd5(dt);
 };
 })();
