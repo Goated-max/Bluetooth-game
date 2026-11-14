@@ -2048,7 +2048,6 @@ genMaze=function(seed){
   grid=Array.from({length:GW},()=>Array(GW).fill(1));
   for(let z=1;z<=11;z++)for(let x=1;x<=23;x++)grid[z][x]=0;        // the store floor
   for(const x of [3,7,11,15,19])for(let z=3;z<=9;z++)grid[z][x]=1;  // shelf rows of products
-  for(let x=13;x<=18;x++)grid[10][x]=1;                             // checkout counter
   grid[12][12]=0;                                                   // door down to the basement
   const st=[[1,13]];grid[13][1]=0;                                  // basement: a perfect maze
   while(st.length){
@@ -2639,11 +2638,11 @@ buildWorld=function(){
 SH.tasks.forEach(t=>{
     if(t.kind!=='stock'||!t.mesh)return;
     // find the nearest open store cell that has a wall beside it, and put the shelf against that wall
-    const wallDir=(x,z)=>DIRS4.find(([dx,dz])=>grid[z+dz]&&grid[z+dz][x+dx]===1&&!isPole(x+dx,z+dz));
+    const wallDir=(x,z)=>DIRS4.find(([dx,dz])=>{const nx=x+dx,nz=z+dz;return (nx<=0||nx>=GW-1||nz<=0)&&grid[nz]&&grid[nz][nx]===1});   // only the outer store walls
     let best=null,bd=1e9;
     for(let z=1;z<=10;z++)for(let x=1;x<=23;x++){
       if(grid[z][x]!==0||!wallDir(x,z))continue;
-      if((x===3&&z===10)||(x===22&&z===2))continue;
+      if(Math.abs(x-3)+Math.abs(z-10)<=3)continue;   // keep the spawn corner clear
       if(Math.abs(x-12)+Math.abs(z-12)<=2)continue;
       if(SH.tasks.some(o=>o!==t&&Math.abs(o.tx-x)+Math.abs(o.tz-z)<=1))continue;
       const d=Math.hypot(x-t.tx,z-t.tz);
