@@ -143,12 +143,12 @@ const saveSet=()=>{try{localStorage.setItem('hh_set',JSON.stringify(SET))}catch(
 const FL_POWER=2.2;     // flashlight brightness
 const AMBIENT=.06;      // how much you can see without the flashlight (lower = darker)
 /* ---- world tuning ---- */
-const T=4, WALL_H=5, EYE=1.6;
+const T=4, WALL_H=3.5, EYE=1.6;
 let N=12, GW=25, NEED=5, N_BATT=8, N_LOCK=14;   // these grow with the number of players (see genMaze)
 /* ---- speed tuning ---- */
-const WALK=5;                    // base player speed
-const SPRINT=WALK*2;             // sprint = 2x walk (10)
-const MONSTER_SPEED=WALK*1.5;    // chasing monster = 1.5x walk (7.5)
+let WALK=5;                    // base player speed
+let SPRINT=WALK*2;             // sprint = 2x walk (10)
+let MONSTER_SPEED=WALK*1.5;    // chasing monster = 1.5x walk (7.5)
 const PATROL_SPEED=WALK*.85;     // monsters roaming (4.25)
 const HEAR_WALK=9, HEAR_SPRINT=18, SIGHT=22, SIGHT_DARK=6, CATCH=1.3;
 const SCAN_TIME=15;
@@ -2009,7 +2009,7 @@ const inBase=(x,z)=>z>=BASE_Z;
 const litAt=p=>!inBase(p.x,p.z)&&!SH.late&&SH.lightsOut<=0;
 const CAUSES=['Stared directly into the entity while holding a stack of floor wax.','Mistook the entity for the night manager.','Asked the entity to hold their coffee.','Tried to alphabetize while being hunted.','Argued with a vending machine instead of running.','Sprinted toward the sound that was clearly a trap.','Said "it is probably nothing" out loud.'];
 const SPD={lurker:{p:3.4,h:6.3,sight:18,hear:1},mimic:{p:3.6,h:7.2,sight:20,hear:1},enforcer:{p:4.8,h:8.4,sight:24,hear:1.35}};
-const TINT={lurker:[0xc9ced6,0xbfe6ff,[.85,1.28,.85]],mimic:[0xb8c46a,0xfff06a,[1,1,1]],enforcer:[0x8a2a2a,0xff7a20,[1.28,1.28,1.28]]};
+const TINT={lurker:[0xc9ced6,0xbfe6ff,[.8,1,.8]],mimic:[0xb8c46a,0xfff06a,[1,1,1]],enforcer:[0x8a2a2a,0xff7a20,[1.1,1.1,1.1]]};
 const PLAN={
   1:[['stock','S'],['broom','S'],['mop','S'],['fuse','B']],
   2:[['stock','S'],['broom','S'],['mop','S'],['fuse','B'],['terminal','K'],['crateP','S',0],['crateD','K',0]],
@@ -2323,7 +2323,7 @@ function openElevator(){
 }
 function startDread(){
   SH.dread=[22,26,30][SH.night-1];SH.nextDread=[80,65,50][SH.night-1]+Math.random()*20;
-  SH.lightsOut=Math.random()<.4?10:0;
+  SH.lightsOut=0;
   toast(SH.lightsOut?'The store lights die... something is running toward you.':'Everything goes quiet. Something is awake.',3200);
 }
 const clockStr=()=>{const m=Math.min(480,Math.floor(SH.t/NIGHT_SEC*480))+22*60,h=Math.floor(m/60)%24,mm=m%60;return ((h%12)||12)+':'+(mm<10?'0':'')+mm+(h>=12?' PM':' AM')};
@@ -2367,7 +2367,7 @@ function shiftTick(dt){
   SH.t+=dt;
   if(SH.dread>0)SH.dread-=dt;else{SH.nextDread-=dt;if(SH.nextDread<=0)startDread()}
   if(SH.lightsOut>0)SH.lightsOut-=dt;
-  SH.nextFlick-=dt;if(SH.nextFlick<=0){SH.nextFlick=28+Math.random()*25;if(SH.lightsOut<=0&&SH.dread<=0)SH.lightsOut=1.4}
+  SH.nextFlick-=dt;
   SH.nextFoot-=dt;if(SH.nextFoot<=0){SH.nextFoot=16+Math.random()*16;for(let i=0;i<4;i++)noise(.1,.18,200,.8,i*.32)}
   if(!SH.late&&SH.t>=NIGHT_SEC&&!SH.allDone){SH.late=true;toast('6:00 AM! The chores are not finished. The store goes dark - they know where you are. Hide in the lockers!',5200);sfx.alarm()}
   SH.tasks.forEach(t=>{
@@ -2471,6 +2471,7 @@ const _bw=buildWorld;
 buildWorld=function(){
   _bw();
   if(!SH.on)return;
+  ambNow=1;fogNow=.02;ambAt=fogAt=performance.now();
   SH.lights=[];
   for(let x=2;x<=22;x+=4)for(let z=2;z<=10;z+=4){                 // ceiling lights along the aisles
     if(grid[z][x]!==0)continue;
@@ -2540,7 +2541,7 @@ hookFl=function(sh){
   _hf(sh);
   sh.uniforms.uBV=FLU.uBV;sh.uniforms.uBN=FLU.uBN;
   sh.fragmentShader=sh.fragmentShader
-    .replace('float flShade(){','uniform vec3 uBV[12];\nuniform float uBN;\nvec3 bulbLight(){vec3 c=vec3(0.);for(int i=0;i<12;i++){if(float(i)>=uBN)break;vec3 d=vFlPos-uBV[i];c+=vec3(1.,.78,.38)*(1.7/(1.+dot(d,d)*.45));}return c;}\nfloat flShade(){')
+    .replace('float flShade(){','uniform vec3 uBV[12];\nuniform float uBN;\nvec3 bulbLight(){vec3 c=vec3(0.);for(int i=0;i<12;i++){if(float(i)>=uBN)break;vec3 d=vFlPos-uBV[i];c+=vec3(1.,.78,.38)*(2.98/(1.+dot(d,d)*.45));}return c;}\nfloat flShade(){')
     .replace('vec3 outgoingLight = reflectedLight.indirectDiffuse * flShade();','vec3 outgoingLight = reflectedLight.indirectDiffuse * (vec3(flShade()) + bulbLight());');
 };
 
@@ -2616,7 +2617,7 @@ buildWorld=function(){
   for(const x of [3,7,11,15,19])for(let z=3;z<=9;z++){
     if(grid[z][x]!==1)continue;
     for(const [dx,dz] of DIRS4){
-      if(!grid[z+dz]||grid[z+dz][x+dx]!==0||z+dz>11)continue;
+      if(dz!==0||!grid[z+dz]||grid[z+dz][x+dx]!==0||z+dz>11)continue;   // racks only on the sides facing the aisles, not the ends
       put(rackFrames,x,z,dx,dz,T/2+.03,0,1.45,.04,2.9,T-.3);   // backing panel just outside the shelf wall
       for(let p=0;p<4;p++){
         const py=.5+p*.6;
@@ -2635,8 +2636,26 @@ buildWorld=function(){
   rackBoxes.forEach((arr,ci)=>{if(!arr.length)return;const im=new THREE.InstancedMesh(unit,mkMat({color:PAL[ci]}),arr.length);place(im,arr);im.frustumCulled=false;scene.add(im)});
 
   // restock task: the stock station becomes a shelf unit whose slots fill as the task progresses
-  SH.tasks.forEach(t=>{
+SH.tasks.forEach(t=>{
     if(t.kind!=='stock'||!t.mesh)return;
+    // find the nearest open store cell that has a wall beside it, and put the shelf against that wall
+    const wallDir=(x,z)=>DIRS4.find(([dx,dz])=>grid[z+dz]&&grid[z+dz][x+dx]===1&&!isPole(x+dx,z+dz));
+    let best=null,bd=1e9;
+    for(let z=1;z<=10;z++)for(let x=1;x<=23;x++){
+      if(grid[z][x]!==0||!wallDir(x,z))continue;
+      if((x===3&&z===10)||(x===22&&z===2))continue;
+      if(Math.abs(x-12)+Math.abs(z-12)<=2)continue;
+      if(SH.tasks.some(o=>o!==t&&Math.abs(o.tx-x)+Math.abs(o.tz-z)<=1))continue;
+      const d=Math.hypot(x-t.tx,z-t.tz);
+      if(d<bd){bd=d;best=[x,z]}
+    }
+    if(best){t.tx=best[0];t.tz=best[1];t.x=tc(best[0]);t.z=tc(best[1])}
+    const d=wallDir(t.tx,t.tz);
+    if(d){
+      const fx=-d[0],fz=-d[1];                                   // the shelf faces out into the aisle
+      t.mesh.rotation.y=Math.atan2(fx,fz);
+      t.mesh.position.set(t.x+d[0]*(T/2-.22),0,t.z+d[1]*(T/2-.22));   // its back panel sits on the wall
+    }
     t.mesh.clear();
     const wood=mkMat({color:0x4a4f57});
     const back=new THREE.Mesh(new THREE.BoxGeometry(1.7,1.9,.05),wood);back.position.set(0,.95,-.22);t.mesh.add(back);
@@ -2712,10 +2731,12 @@ buildWorld=function(){
   if(!SH.on)return;
   DOOR.open=false;
   const pivot=new THREE.Group();
-  pivot.position.set(DOOR_CX-T/2,0,DOOR_CZ);      // hinge on the store side of the stairs
-  const panel=new THREE.Mesh(new THREE.BoxGeometry(T-.1,WALL_H,.2),mkMat({color:0x5a3d28}));
-  panel.position.set(T/2,WALL_H/2,0);pivot.add(panel);
+  pivot.position.set(DOOR_CX-T/2+.15,0,DOOR_CZ);   // hinge on the store side of the doorway
+  const panel=new THREE.Mesh(new THREE.BoxGeometry(T-.3,2.9,.2),mkMat({color:0x5a3d28}));
+  panel.position.set((T-.3)/2,1.45,0);pivot.add(panel);
   scene.add(pivot);DOOR.pivot=pivot;
+  const lintel=new THREE.Mesh(new THREE.BoxGeometry(T,.2,.6),mkMat({color:0x6b6358}));
+  lintel.position.set(DOOR_CX,WALL_H-.1,DOOR_CZ);scene.add(lintel);   // the strip above the door, out of the monsters' way
 };
 const _ft3=findTarget;
 findTarget=function(){
@@ -2745,6 +2766,14 @@ update=function(dt){
     doorHold=near?doorHold+dt:0;
     if(doorHold>=.5){DOOR.open=true;doorHold=0}
   }
+};
+/* night shift speeds: walk 7, sprint 14 (2x walk), monsters 11.2 (1.6x walk) */
+const _upd5=update;
+update=function(dt){
+  WALK=SH.on?7:5;
+  SPRINT=WALK*2;
+  MONSTER_SPEED=WALK*(SH.on?1.6:1.5);
+  _upd5(dt);
 };
 })();
 /* ===== END NIGHT SHIFT ===== */
