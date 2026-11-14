@@ -548,7 +548,7 @@ function buildWorld(){
   const wallMat=mkMat({map:makeTex('wall')});
   const spots=[];
   for(let z=0;z<GW;z++)for(let x=0;x<GW;x++){
-    if(grid[z][x]!==1||isPole(x,z))continue;let vis=false;
+    if(grid[z][x]!==1)continue;let vis=false;
     for(let dz=-1;dz<=1&&!vis;dz++)for(let dx=-1;dx<=1;dx++){if(grid[z+dz]&&grid[z+dz][x+dx]===0){vis=true;break}}
     if(vis)spots.push([x,z]);
   }
