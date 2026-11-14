@@ -143,7 +143,7 @@ const saveSet=()=>{try{localStorage.setItem('hh_set',JSON.stringify(SET))}catch(
 const FL_POWER=2.2;     // flashlight brightness
 const AMBIENT=.06;      // how much you can see without the flashlight (lower = darker)
 /* ---- world tuning ---- */
-const T=4, WALL_H=3, EYE=1.6;
+const T=4, WALL_H=5, EYE=1.6;
 let N=12, GW=25, NEED=5, N_BATT=8, N_LOCK=14;   // these grow with the number of players (see genMaze)
 /* ---- speed tuning ---- */
 const WALK=5;                    // base player speed
@@ -216,7 +216,7 @@ function bfsPath(sx,sz,tx,tz,fx,fz){
   if(fx!==undefined){if(p.length)p[p.length-1]={x:fx,z:fz};else p.push({x:fx,z:fz})}
   return p;
 }
-const wallAt=(x,z)=>{const i=Math.floor(x/T),j=Math.floor(z/T);return !grid[j]||grid[j][i]!==0};
+const wallAt=(x,z)=>{const i=Math.floor(x/T),j=Math.floor(z/T);return !grid[j]||grid[j][i]!==0||(window.doorShut&&window.doorShut(x,z))};
 const blocked=(x,z,r)=>wallAt(x-r,z-r)||wallAt(x+r,z-r)||wallAt(x-r,z+r)||wallAt(x+r,z+r)||lockers.some(l=>Math.abs(x-l.x)<.55+r&&Math.abs(z-l.z)<.55+r);
 function los(ax,az,bx,bz){const dx=bx-ax,dz=bz-az,d=Math.hypot(dx,dz),n=Math.ceil(d/.8);for(let i=1;i<n;i++){const t=i/n;if(wallAt(ax+dx*t,az+dz*t))return false}return true}
 function shuffle(a){for(let i=a.length-1;i>0;i--){const j=(rng()*(i+1))|0;[a[i],a[j]]=[a[j],a[i]]}return a}
@@ -548,7 +548,7 @@ function buildWorld(){
   const wallMat=mkMat({map:makeTex('wall')});
   const spots=[];
   for(let z=0;z<GW;z++)for(let x=0;x<GW;x++){
-    if(grid[z][x]!==1)continue;let vis=false;
+    if(grid[z][x]!==1||isPole(x,z))continue;let vis=false;
     for(let dz=-1;dz<=1&&!vis;dz++)for(let dx=-1;dx<=1;dx++){if(grid[z+dz]&&grid[z+dz][x+dx]===0){vis=true;break}}
     if(vis)spots.push([x,z]);
   }
@@ -1323,6 +1323,7 @@ function onNet(m,from){
       });
       m.pl.forEach(e=>{if(e[0]!==me.id)setPeer(e[0],[e[1],e[2],e[3],e[4],e[5]])});
       m.f.split('').forEach((c,i)=>setFuse(i,+c,m.fb[i]));
+      if(m.dr&&window.setDoors)window.setDoors(m.dr);
       m.b.split('').forEach((c,i)=>{if(c==='1'&&batts[i]&&!batts[i].got){batts[i].got=true;batts[i].mesh.visible=false}});
       if(m.u&&!pu.got){pu.got=true;pu.mesh.visible=false}
       break;
@@ -2337,10 +2338,10 @@ function shiftTick(dt){
   if(state!=='dying'){                                           // no flashlight: the store lights decide what you see
     if(dread!==SH.dreadOn){SH.dreadOn=dread;hum(dread);if(musicBus&&AC)musicBus.gain.setTargetAtTime(dread?0:(SET.music?.55:0),AC.currentTime,.3)}
     FLU.uFlI.value=0;
-    let amb=inB?.02:(SH.late?.3:1);
+    let amb=fadeAmb(inB?.02:(SH.late?.3:1));
     if(SH.lightsOut>0)amb=0;
     FLU.uAmb.value=amb;
-    if(scene&&scene.fog)scene.fog.density=SH.late?.06:(inB?.07:.02);
+    if(scene&&scene.fog)scene.fog.density=fadeFog(SH.late?.06:(inB?.07:.02));
   }
   if(SH.blind>0){SH.blind-=dt;flashEl.style.opacity=Math.max(0,Math.min(1,SH.blind/1.5))}
   fbBtn.textContent='FLASH '+SH.fb;
@@ -2514,6 +2515,24 @@ const groundAt=(x,z)=>{
 const BULB_V=Array.from({length:12},()=>new THREE.Vector3());  // bulbs in view space, refreshed each frame
 let BULB_W=[];                                                  // bulbs in world space
 FLU.uBV={value:BULB_V};FLU.uBN={value:0};
+/* eases the ambient light toward its target instead of snapping */
+let ambNow=1, ambAt=performance.now();
+const fadeAmb=target=>{
+  const now=performance.now(), dt=Math.min(.1,(now-ambAt)/1000);
+  ambAt=now;
+  const step=dt*.3;   // about 3 seconds from full bright to dark
+  ambNow+=Math.max(-step,Math.min(step,target-ambNow));
+  return ambNow;
+};
+/* eases the fog density toward its target instead of snapping */
+let fogNow=.02, fogAt=performance.now();
+const fadeFog=target=>{
+  const now=performance.now(), dt=Math.min(.1,(now-fogAt)/1000);
+  fogAt=now;
+  const step=dt*.02;   // about 2.5 seconds from store fog to basement fog
+  fogNow+=Math.max(-step,Math.min(step,target-fogNow));
+  return fogNow;
+};
 
 /* each basement bulb adds a warm pool of light; in the basement only the bulbs light the room */
 const _hf=hookFl;
@@ -2549,6 +2568,12 @@ buildWorld=function(){
     dm.position.set(tc(x),(top+bot)/2,tc(z));dm.scale.set(1,(top-bot)/WALL_H,1);dm.updateMatrix();nw.setMatrixAt(i,dm.matrix);
   });
   nw.frustumCulled=false;scene.remove(oldW);scene.add(nw);
+  // poles: thin columns from the basement floor to the basement ceiling
+  const pillarMat=mkMat({color:0x7a7f86});
+  POLE_Z.forEach(z=>POLE_X.forEach(x=>{
+    const p=new THREE.Mesh(new THREE.CylinderGeometry(.22,.22,WALL_H,10),pillarMat);
+    p.position.set(tc(x),WALL_H/2-DROP,tc(z));scene.add(p);
+  }));
 
   // floors and ceilings: the store floor stops at the stairs, the basement sits lower
   scene.remove(oldF);
@@ -2569,7 +2594,7 @@ buildWorld=function(){
 
   // basement bulbs: small yellow bulbs hanging from the ceiling, the only light down there
   BULB_W=[];
-  for(const z of [15,19,23])for(const x of [3,7,11,15,19]){if(BULB_W.length<12&&grid[z][x]===0)BULB_W.push([x,z])}
+  for(const z of [13,17,21])for(const x of [5,9,13,17,21]){if(BULB_W.length<12&&grid[z][x]===0)BULB_W.push([x,z])}
   const bulbMat=new THREE.MeshBasicMaterial({color:0xffe27a});
   const bulbG=new THREE.SphereGeometry(.09,8,6);
   BULB_W=BULB_W.map(([x,z])=>{const v=new THREE.Vector3(tc(x),WALL_H-DROP-.14,tc(z));const m=new THREE.Mesh(bulbG,bulbMat);m.position.copy(v);scene.add(m);return v});
@@ -2592,7 +2617,7 @@ buildWorld=function(){
     if(grid[z][x]!==1)continue;
     for(const [dx,dz] of DIRS4){
       if(!grid[z+dz]||grid[z+dz][x+dx]!==0||z+dz>11)continue;
-      put(rackFrames,x,z,dx,dz,T/2-.02,0,1.45,.04,2.9,T-.3);   // backing panel against the shelf wall
+      put(rackFrames,x,z,dx,dz,T/2+.03,0,1.45,.04,2.9,T-.3);   // backing panel just outside the shelf wall
       for(let p=0;p<4;p++){
         const py=.5+p*.6;
         put(rackFrames,x,z,dx,dz,T/2+.21,0,py,.42,.06,T-.3);    // shelf plank jutting into the aisle
@@ -2650,6 +2675,76 @@ update=function(dt){
     BARS.style.top=(ob.offsetTop+ob.offsetHeight+10)+'px';   // stamina bar sits under the task list
   }else BARS.style.top='';
   FLU.uBN.value=SH.on?BULB_W.length:0;
+};
+/* basement: one open hall held up by poles, and the monsters start down there */
+const BASE_CELL=13, POLE_X=[3,7,11,15,19,23], POLE_Z=[15,19,23];
+const isPole=(x,z)=>POLE_Z.includes(z)&&POLE_X.includes(x);
+const _gm2=genMaze;
+genMaze=function(seed){
+  _gm2(seed);
+  if(!SH.on)return;
+  for(let z=BASE_CELL;z<GW-1;z++)for(let x=1;x<GW-1;x++)grid[z][x]=0;   // open hall
+  for(let z=0;z<GW;z++)for(let x=0;x<GW;x++)if(isPole(x,z))grid[z][x]=1; // the poles
+};
+const _lay3=layout;
+layout=function(){
+  const L=_lay3();
+  if(SH.on){
+    const bo=[];for(let z=BASE_CELL;z<GW-1;z++)for(let x=1;x<GW-1;x++)if(grid[z][x]===0)bo.push([x,z]);
+    L.mc=L.mc.map((_,i)=>bo[(i*37+5)%bo.length]);   // monsters start in the basement
+  }
+  return L;
+};
+/* door across the top of the stairs: monsters open it after 0.5s, players use USE */
+const DOOR={open:false,pivot:null};
+const DOOR_CX=tc(12), DOOR_CZ=STAIR_Z0;
+let doorHold=0;
+window.doorShut=(x,z)=>SH.on&&!DOOR.open&&x>=DOOR_CX-T/2&&x<=DOOR_CX+T/2&&z>=DOOR_CZ-.6&&z<=DOOR_CZ+.6;
+window.setDoors=s=>{DOOR.open=s[0]==='1'};   // guests follow the host's door
+function toggleDoor(force){
+  const open=force===undefined?!DOOR.open:force;
+  if(!open&&(Math.hypot(me.x-DOOR_CX,me.z-DOOR_CZ)<1.8||mons.some(m=>Math.hypot(m.x-DOOR_CX,m.z-DOOR_CZ)<1.8))){toast('Something is in the doorway.',1000);return}
+  DOOR.open=open;sfx.click();
+}
+const _bw4=buildWorld;
+buildWorld=function(){
+  _bw4();
+  if(!SH.on)return;
+  DOOR.open=false;
+  const pivot=new THREE.Group();
+  pivot.position.set(DOOR_CX-T/2,0,DOOR_CZ);      // hinge on the store side of the stairs
+  const panel=new THREE.Mesh(new THREE.BoxGeometry(T-.1,WALL_H,.2),mkMat({color:0x5a3d28}));
+  panel.position.set(T/2,WALL_H/2,0);pivot.add(panel);
+  scene.add(pivot);DOOR.pivot=pivot;
+};
+const _ft3=findTarget;
+findTarget=function(){
+  const t=_ft3();
+  if(t||!SH.on)return t;
+  return Math.hypot(DOOR_CX-me.x,DOOR_CZ-me.z)<2.4?{k:'d'}:null;
+};
+const _au3=applyUse;
+applyUse=function(k,i,by){if(k==='d'){toggleDoor();return}_au3(k,i,by)};
+let doorPrompt=false;
+const _hud3=hud;
+hud=function(){
+  _hud3();
+  const t=(state==='play'&&!hideAnim)?findTarget():null;
+  if(t&&t.k==='d'){$('prompt').textContent=DOOR.open?'Close the door':'Open the door';$('btnUse').classList.add('ready');doorPrompt=true}
+  else if(doorPrompt){$('prompt').textContent='';$('btnUse').classList.remove('ready');doorPrompt=false}
+};
+const _send3=send;
+send=function(o){if(SH.on&&o&&o.t==='s')o.dr=DOOR.open?'1':'0';_send3(o)};
+const _upd4=update;
+update=function(dt){
+  _upd4(dt);
+  if(!SH.on||!DOOR.pivot)return;
+  DOOR.pivot.rotation.y+=((DOOR.open?Math.PI/2:0)-DOOR.pivot.rotation.y)*Math.min(1,dt*6);
+  if(role!=='guest'&&!DOOR.open){
+    const near=mons.some(m=>Math.hypot(m.x-DOOR_CX,m.z-DOOR_CZ)<2.6);
+    doorHold=near?doorHold+dt:0;
+    if(doorHold>=.5){DOOR.open=true;doorHold=0}
+  }
 };
 })();
 /* ===== END NIGHT SHIFT ===== */
