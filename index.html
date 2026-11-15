@@ -170,6 +170,7 @@ let exitBeam=null, exitRing=null;
 const pu={x:0,z:0,got:false,mesh:null};
 const me={id:0,x:0,z:0,yaw:0,pitch:0,hid:-1,saw:false,sawBy:-1,risk:0};
 let fuseCount=0, flOn=true, batt=100, stam=100, exhausted=false, stepAcc=0, bobT=0, noiseR=0;
+let stamDrain=22;
 const net={pc:null,dc:null,t:0,bt:false,n2l:{},l2n:{}};
 const inp={mx:0,mz:0,keys:{},sprint:false};
 const mapC=$('map'), mx=mapC.getContext('2d'), bigC=$('bigc'), bx=bigC.getContext('2d');
@@ -967,7 +968,7 @@ function movePlayer(dt){
   }
   noiseR=moving?(sprinting?HEAR_SPRINT:HEAR_WALK):0;
   if(sprinting){
-    stam-=22*dt;breathT-=dt;if(breathT<=0){breathT=.5;sfx.breath(.05)}
+    stam-=stamDrain*dt;breathT-=dt;if(breathT<=0){breathT=.5;sfx.breath(.05)}
     if(stam<=0){stam=0;exhausted=true;sfx.gasp()}
   }else{stam=Math.min(100,stam+12*dt);if(exhausted&&stam>30)exhausted=false}
 }
@@ -1044,7 +1045,7 @@ function monsterAI(dt){
       const c=layoutOpen[(Math.random()*layoutOpen.length)|0];
       mo.path=bfsPath(mt[0],mt[1],c[0],c[1]);
     }
-    smoothPath(mo);
+    if(mo.mode==='hunt')smoothPath(mo);
     stepMon(mo,spd*dt);
     // stuck detector: no real progress for ~1.2s (and not deliberately waiting at a locker) -> pick a fresh route
     mo.wt+=dt;
@@ -2148,7 +2149,7 @@ function decorate(mo,type){
     if(m.fog===false){if(m.color)m.color.set(eye)}else if(m.onBeforeCompile===hookFl&&m.color)m.color.lerp(col,.6)});
   if(type==='mimic'){
     const did=me.id===0?1:0;
-    mo.dg=mkRemote(did);mo.dg.visible=true;mo.dg.userData.glow.visible=true;mo.dg.userData.lamps.forEach(l=>{l.visible=true});
+    mo.dg=mkRemote(did);mo.dg.visible=true;mo.dg.userData.glow.visible=false;mo.dg.userData.lamps.forEach(l=>{l.visible=false});
     scene.add(mo.dg);mo.dgp={mesh:mo.dg,v:0,ph:0,id:did};mo.disg=true;mo.mesh.visible=false;
   }
 }
@@ -2156,6 +2157,12 @@ function reveal(mo){
   if(!mo.disg)return;mo.disg=false;mo.mesh.visible=true;if(mo.dg)mo.dg.visible=false;
   mo.mode='hunt';mo.hunt=8;sfx.stinger(8);vib([120,40,160]);flashEl.style.opacity=.35;setTimeout(()=>{if(!SH.blind)flashEl.style.opacity=0},120);
   if(hostSide())toast('THAT IS NOT YOUR COWORKER!',2200);
+}
+function disguise(mo){
+  if(mo.disg||!mo.dg)return;
+  mo.disg=true;mo.mesh.visible=false;
+  mo.dg.visible=true;mo.dg.userData.glow.visible=false;mo.dg.userData.lamps.forEach(l=>{l.visible=false});
+  mo.mode='patrol';mo.path=[];mo.arrived=false;mo.hunt=0;
 }
 function shiftAI(dt){
   if(state!=='play')return;
@@ -2174,6 +2181,11 @@ function shiftAI(dt){
     const mt=[Math.floor(mo.x/T),Math.floor(mo.z/T)];
     mo.repath-=dt;
     if(mo.disg){                                                  // walks up to you looking like a teammate
+    if(!mo.disg&&mo.type==='mimic'){
+      const watched=ps.some(p=>!p.hid&&Math.hypot(p.x-mo.x,p.z-mo.z)<P.sight&&los(mo.x,mo.z,p.x,p.z));
+      mo.unseen=watched?0:(mo.unseen||0)+dt;
+      if(mo.unseen>5&&!dread&&!wild&&(!best||bd>12)){disguise(mo);mo.unseen=0}
+    }
       if(!seen)mo.watch=0;else mo.watch=(mo.watch||0)+dt;
       if(best&&(bd<3.4||(seen&&bd<10&&mo.watch>1.8)||dread||wild)){reveal(mo)}
       else{
@@ -2197,7 +2209,7 @@ function shiftAI(dt){
         else{mo.path=bfsPath(mt[0],mt[1],lt[0],lt[1],mo.lk.x,mo.lk.z);if(!mo.path.length||Math.hypot(mo.lk.x-mo.x,mo.lk.z-mo.z)<1.5)mo.arrived=true}
       }
     }else if(!mo.path.length&&!mo.disg){const c=layoutOpen[(Math.random()*layoutOpen.length)|0];mo.path=bfsPath(mt[0],mt[1],c[0],c[1])}
-    smoothPath(mo);
+    if(mo.mode==='hunt')smoothPath(mo);
     stepMon(mo,spd*dt);
     mo.wt+=dt;
     if(mo.wt>=1.2){
@@ -2355,7 +2367,8 @@ function shiftTick(dt){
     if(!m.dg)return;
     m.dg.visible=!!m.disg;if(!m.disg)return;
     const dx=m.x-(m.pdx===undefined?m.x:m.pdx),dz=m.z-(m.pdz===undefined?m.z:m.pdz);m.pdx=m.x;m.pdz=m.z;
-    m.dgp.v=Math.hypot(dx,dz)/Math.max(dt,.001);m.dg.position.set(m.x,0,m.z);m.dg.rotation.y=m.ry+Math.PI;animPeer(m.dgp,dt,false);
+    const sp=Math.hypot(dx,dz)/Math.max(dt,.001);m.runT=(m.runT||0)-dt;if(m.runT<=0){m.run=Math.random()<.4;m.runT=1.5+Math.random()*3}
+    m.dgp.v=m.run&&sp>.5?SPRINT:sp;m.dg.position.set(m.x,0,m.z);m.dg.rotation.y=m.ry+Math.PI;animPeer(m.dgp,dt,false);
   });
   if(state!=='play')return;
   const lc=me.id,mine=SH.tasks.find(t=>t.by===lc&&!t.done);
@@ -2778,8 +2791,10 @@ const _upd5=update;
 update=function(dt){
   WALK=SH.on?7:5;
   SPRINT=WALK*2;
+  stamDrain=SH.on?100/9:22;
   MONSTER_SPEED=WALK*(SH.on?1.6:1.5);
   SPD.lurker.h=SPD.mimic.h=SPD.enforcer.h=MONSTER_SPEED;
+  SPD.lurker.p=SPD.mimic.p=SPD.enforcer.p=5;
   _upd5(dt);
 };
 })();
