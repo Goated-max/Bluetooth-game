@@ -2180,12 +2180,12 @@ function shiftAI(dt){
     if(best){seen=bd<P.sight&&los(mo.x,mo.z,best.x,best.z)&&(best.fl||bd<6);heard=bd<best.noise*P.hear}
     const mt=[Math.floor(mo.x/T),Math.floor(mo.z/T)];
     mo.repath-=dt;
-    if(mo.disg){                                                  // walks up to you looking like a teammate
     if(!mo.disg&&mo.type==='mimic'){
       const watched=ps.some(p=>!p.hid&&Math.hypot(p.x-mo.x,p.z-mo.z)<P.sight&&los(mo.x,mo.z,p.x,p.z));
       mo.unseen=watched?0:(mo.unseen||0)+dt;
       if(mo.unseen>5&&!dread&&!wild&&(!best||bd>12)){disguise(mo);mo.unseen=0}
     }
+    if(mo.disg){                                                  // walks up to you looking like a teammate
       if(!seen)mo.watch=0;else mo.watch=(mo.watch||0)+dt;
       if(best&&(bd<3.4||(seen&&bd<10&&mo.watch>1.8)||dread||wild)){reveal(mo)}
       else{
@@ -2200,7 +2200,8 @@ function shiftAI(dt){
     }else if(best&&(seen||heard)){
       if(mo.mode!=='hunt')sfx.stinger(bd);mo.mode='hunt';mo.hunt=7;mo.lk={x:best.x,z:best.z};mo.arrived=false;
     }else if(mo.mode==='hunt'){mo.hunt-=dt;if(mo.hunt<=0){mo.mode='patrol';mo.path=[];mo.arrived=false}}
-    const spd=(mo.mode==='hunt'?P.h:P.p)*(wild?1.15:dread?.95:1);
+    if(mo.disg){mo.runT=(mo.runT||0)-dt;if(mo.runT<=0){mo.runD=Math.random()<.4;mo.runT=1.5+Math.random()*3}}
+    const spd=mo.disg?(mo.runD?SPRINT:WALK):(mo.mode==='hunt'?P.h:P.p)*(wild?1.15:dread?.95:1);
     if(mo.mode==='hunt'&&!mo.disg){
       if(seen&&bd<9&&best){mo.path=[{x:best.x,z:best.z}];mo.arrived=false}
       else if(mo.repath<=0){
@@ -2367,8 +2368,8 @@ function shiftTick(dt){
     if(!m.dg)return;
     m.dg.visible=!!m.disg;if(!m.disg)return;
     const dx=m.x-(m.pdx===undefined?m.x:m.pdx),dz=m.z-(m.pdz===undefined?m.z:m.pdz);m.pdx=m.x;m.pdz=m.z;
-    const sp=Math.hypot(dx,dz)/Math.max(dt,.001);m.runT=(m.runT||0)-dt;if(m.runT<=0){m.run=Math.random()<.4;m.runT=1.5+Math.random()*3}
-    m.dgp.v=m.run&&sp>.5?SPRINT:sp;m.dg.position.set(m.x,0,m.z);m.dg.rotation.y=m.ry+Math.PI;animPeer(m.dgp,dt,false);
+
+    m.dgp.v=Math.hypot(dx,dz)/Math.max(dt,.001);m.dg.position.set(m.x,0,m.z);m.dg.rotation.y=m.ry+Math.PI;animPeer(m.dgp,dt,false);
   });
   if(state!=='play')return;
   const lc=me.id,mine=SH.tasks.find(t=>t.by===lc&&!t.done);
