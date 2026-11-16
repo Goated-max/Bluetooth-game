@@ -3069,6 +3069,7 @@ function revivedMe(){stam=60;exhausted=false;SH.blind=0;flashEl.style.opacity=0;
 function finishFired(){
   hideRep();send({t:'shf'});
   _se(false,'You are out of retainers. The team is booted back to Night 1.');$('endT').textContent="YOU'RE FIRED";
+  BANK.roleFree=true;saveBank();
 }
 function restartNight(n,l){
   hideRep();hidePay();
@@ -3246,11 +3247,12 @@ const ovT=ovl.querySelector('#ovT'),ovInfo=ovl.querySelector('#ovInfo'),ovRoles=
 let ovMode='',payTimer=0,payStart=0;
 const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 function renderOvl(){
+const roleLocked=()=>ovMode==='pay'&&!BANK.roleFree;
   ovRoles.innerHTML='';
   ROLES.forEach(r=>{
     const d=document.createElement('div');d.className='rc'+(BANK.role===r.k?' sel':'');
     d.innerHTML='<b>'+esc(r.n)+'</b>'+r.pro.map(p=>'<div class="p">+ '+esc(p)+'</div>').join('')+(r.con?'<div class="c">- '+esc(r.con)+'</div>':'')+(r.tool?'<div class="t">TOOL: '+esc(r.tool)+'</div>':'');
-    d.onclick=()=>{BANK.role=r.k;saveBank();renderOvl();sfx.click()};
+    d.onclick=()=>{if(roleLocked()){toast('Your role is locked after Night 1.',2200);sfx.click();return}BANK.role=r.k;BANK.roleFree=false;saveBank();renderOvl();sfx.click()};
     ovRoles.appendChild(d);
   });
   ovShopT.textContent='BREAK ROOM SHOP - CREDITS: '+BANK.cr;
