@@ -15,9 +15,10 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;font-family:"Cour
 #touch{position:absolute;inset:0;pointer-events:auto;z-index:1}
 #obj{position:absolute;top:calc(10px + env(safe-area-inset-top));left:calc(14px + env(safe-area-inset-left));font-size:13px;line-height:1.35;white-space:pre;max-width:46vw;text-shadow:0 0 6px #000;z-index:2}
 .bars{position:absolute;top:calc(58px + env(safe-area-inset-top));left:calc(14px + env(safe-area-inset-left));z-index:2}
-.bar{width:120px;height:7px;border:1px solid rgba(200,210,190,.4);margin-bottom:5px;background:rgba(0,0,0,.5)}
+.bar{width:180px;height:12px;border:1px solid rgba(200,210,190,.5);margin-bottom:6px;background:rgba(0,0,0,.5)}
 .bar i{display:block;height:100%;width:100%}
-.lbl{font-size:10px;opacity:.6;margin-bottom:1px}
+.lbl{font-size:12px;opacity:.7;margin-bottom:2px}
+.bar.exh{animation:exh .6s steps(1) infinite}@keyframes exh{50%{opacity:.15}}
 #mapwrap{position:absolute;top:calc(10px + env(safe-area-inset-top));right:calc(12px + env(safe-area-inset-right));width:min(30vmin,150px);height:min(30vmin,150px);z-index:4;pointer-events:auto}
 #map{width:100%;height:100%;display:block}
 #bigmap{position:absolute;inset:0;display:none;z-index:6;background:rgba(0,0,0,.78);align-items:center;justify-content:center;flex-direction:column;pointer-events:auto}
@@ -963,7 +964,7 @@ function movePlayer(dt){
     const wx=(s*nz+c*nx)*sp*dt, wz=(c*nz-s*nx)*sp*dt;
     if(!blocked(me.x+wx,me.z,.35))me.x+=wx;
     if(!blocked(me.x,me.z+wz,.35))me.z+=wz;
-    stepAcc+=sp*dt;bobT+=sp*dt*.9;
+    stepAcc+=sp*dt;bobT+=(sprinting?WALK:sp)*dt*.9;
     if(stepAcc>(sprinting?5.5:3.8)){stepAcc=0;sfx.step(sprinting)}
   }
   noiseR=moving?(sprinting?HEAR_SPRINT:HEAR_WALK):0;
@@ -1510,6 +1511,7 @@ function updateCamera(){
 function hud(){
   $('bBatt').style.width=batt+'%';$('bBatt').style.background=batt<20?'#a22':'#cfc27a';
   $('bStam').style.width=stam+'%';$('bStam').style.background=exhausted?'#a22':'#6a8a6a';
+  $('bStam').parentNode.classList.toggle('exh',exhausted);
   const ot=objText();if(ot!==lastObj){lastObj=ot;$('obj').textContent=ot}
   if(hasScan){
     const b=$('btnScan');
@@ -2284,6 +2286,7 @@ function throwFlash(){
   if(SH.fb<=0){toast('No flashbangs left.',1200);return}
   SH.fb--;let d=7,px,pz;
   for(;d>.5;d-=.5){px=me.x-Math.sin(me.yaw)*d;pz=me.z-Math.cos(me.yaw)*d;if(!wallAt(px,pz))break}
+  const gm=SH.grab&&SH.grab.v===me&&mons[SH.grab.k];if(gm){px=gm.x;pz=gm.z}
   if(hostSide())flashAt(px,pz,me.id);else send({t:'sh',a:'fb',x:px,z:pz});
 }
 fbBtn.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();initAudio();throwFlash()});
@@ -2474,7 +2477,7 @@ hud=function(){
   _hud();
   if(!SH.on)return;
   const t=state==='play'&&!hideAnim?findTarget():null;
-  if(t&&t.k==='t'){$('prompt').textContent='Tap USE: '+SH.tasks[t.i].name;$('btnUse').classList.add('ready')}
+  if(t&&t.k==='t'){const tk=SH.tasks[t.i],pc=Math.round(tk.progress*100);$('prompt').textContent='Tap USE: '+tk.name+(tk.done?' (done)':pc>0?' '+pc+'%':'');$('btnUse').classList.add('ready')}
   else if($('prompt').textContent.indexOf('Tap USE: ')===0)$('prompt').textContent=lastPrompt;
 };
 const _dm=drawMap,_db=drawBigMap;
