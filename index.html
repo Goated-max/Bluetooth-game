@@ -545,7 +545,7 @@ function animPeer(p,dt,carrying){
 function ensureRenderer(){
   if(renderer)return;
   renderer=new THREE.WebGLRenderer({canvas:$('view'),antialias:false,powerPreference:'high-performance'});
-  renderer.setPixelRatio(Math.min(devicePixelRatio||1,1.75));renderer.setSize(innerWidth,innerHeight);
+  renderer.setPixelRatio(Math.min(devicePixelRatio||1,1));renderer.setSize(innerWidth,innerHeight);
 }
 function disposeScene(){
   if(!scene)return;
@@ -3694,7 +3694,7 @@ function shiftTick(dt){
 const _up=update;
 update=function(dt){
   _up(dt);
-  if(!SH.on){BARS.style.top='';return}
+  if(!SH.on){if(BARS.style.top)BARS.style.top='';return}
   guard(()=>shiftTick(dt),'shift');
   guard(()=>{                                                    // follow the floor, then feed the lights
     batt=100;
@@ -3702,8 +3702,8 @@ update=function(dt){
     peers.forEach(p=>{if(p.mesh&&!isDown(p.id))p.mesh.position.y=groundAt(p.x,p.z)});
     camera.position.y+=groundAt(me.x,me.z)+(isDown(me.id)?-.95:0);
     updateLights();
-    const bb=$('bBatt').parentNode;bb.style.display='none';bb.previousElementSibling.style.display='none';
-    const ob=$('obj');BARS.style.top=(ob.offsetTop+ob.offsetHeight+10)+'px';
+    if(!window.__bbHid){window.__bbHid=true;const bb=$('bBatt').parentNode;bb.style.display='none';bb.previousElementSibling.style.display='none'}
+    const ob=$('obj'),tick=Math.floor(performance.now()/500);if(tick!==window.__barTick){window.__barTick=tick;BARS.style.top=(ob.offsetTop+ob.offsetHeight+10)+'px'}
   },'visuals');
 };
 
@@ -3721,7 +3721,7 @@ beginRound=function(seed,r,id,n){
   toolBtn.style.display='none';
   $('btnLight').style.display=SH.on?'none':'';
   coldLbl.style.display=coldBar.style.display='none';
-  if(!SH.on){FLU.uAmb.value=AMBIENT;hum(false);const bb=$('bBatt').parentNode;bb.style.display='';bb.previousElementSibling.style.display='';panicMul=1;return}
+  if(!SH.on){window.__bbHid=false;FLU.uAmb.value=AMBIENT;hum(false);const bb=$('bBatt').parentNode;bb.style.display='';bb.previousElementSibling.style.display='';panicMul=1;return}
   const k=myK();
   hideSpd=k==='owl'?2:1;quietHide=k==='owl';panicMul=k==='temp'?1.5:1;
   toolInit();
