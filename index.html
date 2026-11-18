@@ -1493,7 +1493,89 @@ async function guestJoin(){
     $('guestOut').value=enc(pc.localDescription);setStat('Send the reply code to the host.');
   }catch(e){setStat('Bad host code.')}
 }
-
+/* ---- Wi-Fi: the host makes one code per friend (2, 3 or 4 players) ---- */
+const wifi={count:2,list:[],started:false};
+function wifiPanel(){
+  const box=$('hostBox');
+  [...box.children].forEach(el=>{if(el.id!=='wifiPanel')el.style.display='none'});
+  let p=$('wifiPanel');
+  if(!p){p=document.createElement('div');p.id='wifiPanel';box.appendChild(p)}
+  return p;
+}
+function wifiChoose(){
+  const p=wifiPanel();p.innerHTML='<div style="margin-bottom:8px"><b>How many players?</b></div>';
+  [2,3,4].forEach(n=>{
+    const b=document.createElement('button');b.className='mb';b.textContent=n+' PLAYERS';
+    b.onclick=()=>makeWifiCodes(n);p.appendChild(b);
+  });
+}
+async function makeWifiCodes(n){
+  wifi.count=n;wifi.list=[];wifi.started=false;
+  wifiPanel().innerHTML='';
+  for(let i=1;i<n;i++){
+    setStat('Making the code for friend '+i+' of '+(n-1)+'...');
+    const pc=mkPC(),dc=pc.createDataChannel('g');
+    const c={id:i,pc,dc,open:false,out:''};
+    wifi.list.push(c);hookDC(dc,i);
+    await pc.setLocalDescription(await pc.createOffer());await waitIce(pc);
+    c.out=enc(pc.localDescription);
+  }
+  setStat('Send each code to its friend, then paste their reply.');
+  renderWifi();
+}
+function renderWifi(){
+  const p=wifiPanel();p.innerHTML='';
+  const head=document.createElement('div');head.style.marginBottom='8px';
+  head.textContent='Send each code to its friend. Paste that friend\'s reply under their code.';
+  p.appendChild(head);
+  wifi.list.forEach(c=>{
+    const box=document.createElement('div');box.style.cssText='border-top:1px solid #555;padding:8px 0';
+    const t1=document.createElement('div');t1.innerHTML='<b>FRIEND '+c.id+': send this code</b>';
+    const ta=document.createElement('textarea');ta.readOnly=true;ta.value=c.out;ta.style.cssText='width:100%;height:56px;font-size:10px';
+    const cp=document.createElement('button');cp.className='mb';cp.textContent='COPY CODE '+c.id;
+    cp.onclick=()=>{ta.select();try{navigator.clipboard.writeText(c.out)}catch(e){document.execCommand('copy')}toast('Code '+c.id+' copied',1400)};
+    const t2=document.createElement('div');t2.style.marginTop='6px';t2.innerHTML='<b>FRIEND '+c.id+': paste their reply</b>';
+    const rin=document.createElement('textarea');rin.style.cssText='width:100%;height:56px;font-size:10px';
+    const go=document.createElement('button');go.className='mb';go.textContent='CONNECT FRIEND '+c.id;
+    go.onclick=async()=>{try{await c.pc.setRemoteDescription(dec(rin.value));setStat('Connecting friend '+c.id+'...')}catch(e){setStat('That reply is not for friend '+c.id+' or is incomplete.')}};
+    box.append(t1,ta,cp,t2,rin,go);p.appendChild(box);
+  });
+}
+function setDirect(){const c=wifi.list.find(x=>x.open&&x.dc.readyState==='open');net.dc=c?c.dc:null}
+function checkAllIn(){
+  if(wifi.started||!wifi.list.length||!wifi.list.every(c=>c.open))return;
+  wifi.started=true;
+  const seed=(Math.random()*1e9)|0;
+  wifi.list.forEach(c=>send({t:'start',seed,id:c.id,n:wifi.count},c.id));
+  setStat('Everyone is in. Starting...');
+  beginRound(seed,'host',0,wifi.count);
+}
+hostStart=async function(){
+  role='host';net.bt=false;initAudio();
+  wifi.list.forEach(c=>{try{c.dc.close();c.pc.close()}catch(e){}});
+  wifi.list=[];wifi.started=false;
+  wifiChoose();
+};
+hookDC=function(dc,id){
+  net.dc=dc;
+  dc.onopen=()=>{
+    setStat('Connected!');
+    if(role==='host'&&id!==undefined){const c=wifi.list.find(x=>x.id===id);if(c)c.open=true;setDirect();checkAllIn()}
+  };
+  dc.onmessage=e=>{try{onNet(JSON.parse(e.data),id===undefined?1:id)}catch(err){}};
+  dc.onclose=()=>{
+    toast('Partner disconnected.',3000);
+    peers.forEach(p=>{p.active=false;if(p.mesh)p.mesh.visible=false});
+    if(role==='guest'&&(state==='play'||state==='dying'))showEnd(false,'Lost connection to the host.');
+    const c=wifi.list.find(x=>x.dc===dc);if(c)c.open=false;setDirect();
+  };
+};
+const _sendW=send;
+send=function(o,toLogical){
+  if(net.bt||role!=='host'||!wifi.list.length){_sendW(o,toLogical);return}
+  const msg=JSON.stringify(o);
+  wifi.list.forEach(c=>{if(c.open&&c.dc.readyState==='open'&&(toLogical===undefined||c.id===toLogical))c.dc.send(msg)});
+};
 /* --- Bluetooth Classic transport (custom native plugin "Bt"): host + up to 3 guests --- */
 let btP=null,btHooked=false,btShowAll=false,btScanning=false,btLobby=[];
 const btBufs={}, btDevs=new Map(), btConns=new Set();
@@ -2048,7 +2130,8 @@ const fbBtn=document.createElement('div');fbBtn.className='hb';fbBtn.id='btnFlas
 fbBtn.style.cssText='display:none;right:calc(5vmin + 41vmin + env(safe-area-inset-right));bottom:calc(8vmin + env(safe-area-inset-bottom));width:15vmin;height:15vmin;max-width:80px;max-height:80px;font-size:10px;border-color:#fff;color:#fff';
 $('hud').appendChild(fbBtn);
 const toolBtn=document.createElement('div');toolBtn.className='hb';toolBtn.id='btnTool';
-toolBtn.style.cssText='display:none;right:calc(5vmin + env(safe-area-inset-right));bottom:calc(8vmin + 22vmin + env(safe-area-inset-bottom));width:15vmin;height:15vmin;max-width:82px;max-height:82px;font-size:10px;border-color:#ffb347;color:#ffb347';
+toolBtn.style.cssText='display:none;right:calc(5vmin + env(safe-area-inset-right));bottom:calc(8vmin + 38vmin + env(safe-area-inset-bottom));width:15vmin;height:15vmin;max-width:82px;max-height:82px;font-size:10px;border-color:#ffb347;color:#ffb347';
+
 $('hud').appendChild(toolBtn);
 const paEl=document.createElement('div');paEl.id='pa';$('hud').appendChild(paEl);
 const clipEl=document.createElement('div');clipEl.id='clip';$('hud').appendChild(clipEl);
@@ -2343,7 +2426,8 @@ function warmAt(x,z){
   for(const f of SH.flares)if(Math.hypot(f.x-x,f.z-z)<6)return true;
   return false;
 }
-const litAt=p=>(!inBase(p.x,p.z)&&!SH.late&&SH.lightsOut<=0)||poolLit(p.x,p.z);
+const litAt=p=>(!inBase(p.x,p.z)&&!SH.late&&SH.lightsOut<=0)||poolLit(p.x,p.z)||!!p.flOn;
+
 
 /* ---------- building the store ---------- */
 let lightMat=null, oilMesh=[], flareMesh=[], ovMesh=null;
@@ -2687,13 +2771,14 @@ function tvTick(){
 
 /* ---------- the monster brain ---------- */
 function shiftPlayers(){
-  const ps=[{id:me.id,x:me.x,z:me.z,fl:litAt(me),noise:noiseFor(me.id,noiseR),hid:me.hid>=0,li:me.hid,ref:me,down:isDown(me.id),prot:(SH.prot[me.id]||0)>0,role:rk(me.id)}];
+  const ps=[{id:me.id,x:me.x,z:me.z,fl:litAt({x:me.x,z:me.z,flOn}),noise:noiseFor(me.id,noiseR),hid:me.hid>=0,li:me.hid,ref:me,down:isDown(me.id),prot:(SH.prot[me.id]||0)>0,role:rk(me.id)}];
   peers.forEach(p=>{if(!p.active)return;
     const base=p.v>WALK0*1.5?HEAR_SPRINT:p.v>1?HEAR_WALK:0;
-    ps.push({id:p.id,x:p.x,z:p.z,fl:litAt(p),noise:noiseFor(p.id,base),hid:p.hid>0,li:p.hid-1,ref:p,down:isDown(p.id),prot:(SH.prot[p.id]||0)>0,role:rk(p.id)});
+    ps.push({id:p.id,x:p.x,z:p.z,fl:litAt({x:p.x,z:p.z,flOn:p.fl}),noise:noiseFor(p.id,base),hid:p.hid>0,li:p.hid-1,ref:p,down:isDown(p.id),prot:(SH.prot[p.id]||0)>0,role:rk(p.id)});
   });
   return ps;
 }
+
 const shiftDetect=occ=>{
   let b=occ.ref.saw?1:.42;
   if(occ.role==='owl')b*=.5;                 // they take twice as long to suspect a locker
@@ -3433,8 +3518,8 @@ const _dm=drawMap,_db=drawBigMap;
 const hideMons=fn=>{const s=mons.slice();mons.length=0;try{fn()}finally{s.forEach(m=>mons.push(m))}};
 drawMap=function(){if(SH.on)hideMons(_dm);else _dm()};
 drawBigMap=function(){if(SH.on)hideMons(_db);else _db()};
-const _tl=toggleLight;
-toggleLight=function(){if(SH.on)return;_tl()};                  // no flashlight in this mode
+// flashlight enabled in Night Shift
+
 
 /* ---------- controls ---------- */
 toolBtn.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();initAudio();useTool()});
@@ -3608,10 +3693,13 @@ const BARS=document.querySelector('.bars');
 function shiftTick(dt){
   if(!SH.on)return;
   const dread=SH.dread>0,inB=inBase(me.x,me.z),k=myK();
-  if(state!=='dying'){                                           // no flashlight: the store lights decide what you see
+  if(state!=='dying'){                                           // flashlight + store lights
     if(dread!==SH.dreadOn){SH.dreadOn=dread;hum(dread);if(musicBus&&AC)musicBus.gain.setTargetAtTime(dread?0:(SET.music?.55:0),AC.currentTime,.3)}
-    FLU.uFlI.value=0;
+    let flI=flOn?1:0;
+    if(flOn&&(batt<18||(nearD<12&&closeness>.4)||SH.dread>0)&&Math.random()<.18)flI*=.15;
+    FLU.uFlI.value=flI*FL_POWER;
     let target=inB?.025:SH.lightsOut>0?.035:SH.late?.3:1;
+
     if(k==='freezer')target=Math.max(target,.13);                // sees faint outlines in the dark
     FLU.uAmb.value=fadeAmb(target);
     if(scene&&scene.fog)scene.fog.density=fadeFog(SH.late?.06:inB?(SH.night===3?.085:.07):SH.lightsOut>0?.05:.02);
@@ -3720,17 +3808,14 @@ update=function(dt){
   _up(dt);
   if(!SH.on){if(BARS.style.top)BARS.style.top='';return}
   guard(()=>shiftTick(dt),'shift');
-  guard(()=>{                                                    // follow the floor, then feed the lights
-    batt=100;
+guard(()=>{                                                    // follow the floor, then feed the lights
     mons.forEach(mo=>{if(mo.mesh)mo.mesh.position.y=groundAt(mo.mesh.position.x,mo.mesh.position.z)});
     peers.forEach(p=>{if(p.mesh&&!isDown(p.id))p.mesh.position.y=groundAt(p.x,p.z)});
     camera.position.y+=groundAt(me.x,me.z)+(isDown(me.id)?-.95:0);
     updateLights();
-    if(!window.__bbHid){window.__bbHid=true;const bb=$('bBatt').parentNode;bb.style.display='none';bb.previousElementSibling.style.display='none'}
     const ob=$('obj'),tick=Math.floor(performance.now()/500);if(tick!==window.__barTick){window.__barTick=tick;BARS.style.top=(ob.offsetTop+ob.offsetHeight+10)+'px'}
   },'visuals');
 };
-
 /* ---------- starting a round ---------- */
 const _br=beginRound;
 beginRound=function(seed,r,id,n){
@@ -3743,7 +3828,7 @@ beginRound=function(seed,r,id,n){
   document.body.classList.toggle('sh',SH.on);
   fbBtn.style.display=SH.on?'flex':'none';
   toolBtn.style.display='none';
-  $('btnLight').style.display=SH.on?'none':'';
+  $('btnLight').style.display='';
   coldLbl.style.display=coldBar.style.display='none';
   if(!SH.on){window.__bbHid=false;FLU.uAmb.value=AMBIENT;hum(false);const bb=$('bBatt').parentNode;bb.style.display='';bb.previousElementSibling.style.display='';panicMul=1;return}
   const k=myK();
