@@ -1742,6 +1742,17 @@ resSl.oninput=()=>{
   $('resLbl').textContent='RESOLUTION: '+Math.round(SET.res*100)+'%';
   renderer.setPixelRatio(Math.min(devicePixelRatio||1,SET.res));renderer.setSize(innerWidth,innerHeight);
 };
+/* low graphics: hides the products on the shelves (the restock slots stay) */
+const PALSET=[0xd9574a,0x4a8fd9,0xe8c547,0x5fbf6a,0xb06ad9,0xeeeeee];
+let LOW=!!SET.low;
+const isShelfProduct=o=>o.isInstancedMesh&&o.geometry&&o.geometry.parameters&&o.geometry.parameters.width===1&&o.geometry.parameters.height===1&&o.material&&o.material.color&&PALSET.includes(o.material.color.getHex());
+const applyLow=()=>{if(typeof scene==='undefined'||!scene)return;scene.traverse(o=>{if(isShelfProduct(o))o.visible=!LOW})};
+const lowBtn=document.createElement('button');
+lowBtn.className='mb';lowBtn.textContent='LOW GRAPHICS: '+(LOW?'ON':'OFF');
+lowBtn.onclick=()=>{LOW=!LOW;SET.low=LOW;saveSet();applyLow();lowBtn.textContent='LOW GRAPHICS: '+(LOW?'ON':'OFF');sfx.click()};
+$('menuIn').appendChild(lowBtn);
+const _brLow=beginRound;
+beginRound=function(){const r=_brLow.apply(null,arguments);applyLow();return r};
 $('pResume').onclick=()=>setPause(false);
 $('pLeave').onclick=leaveGame;
 
