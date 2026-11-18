@@ -2052,7 +2052,7 @@ const SH={on:false,pending:false,night:1,lives:3,rand:1};
 const enc=(n,l,r)=>(1+l)*SB+n*1e9+(r%1e9);
 const dec=s=>({lives:Math.floor(s/SB)-1,night:Math.max(1,Math.min(3,Math.floor((s%SB)/1e9))),rand:s%1e9});
 const hostSide=()=>role!=='guest';
-const KINDS={stock:['Stock the shelves',4],broom:['Take a broom',.8],mop:['Sweep up the green residue',6],fuse:['Replace the fuse box',5],terminal:['Type the password',8],generator:['Restart the generator',10],crateP:['Pick up the fragile crate',.8],crateD:['Deliver the crate to checkout',.8]};
+const KINDS={stock:['Stock the shelves',4],broom:['Take a broom',.8],mop:['Sweep up the green residue',6],tables:['Wipe down the break tables',4.5],fuse:['Replace the fuse box',5],terminal:['Type the password',8],generator:['Restart the generator',10],crateP:['Pick up the fragile crate',.8],crateD:['Deliver the crate to checkout',.8]};
 const FLOOR_KINDS={mop:1,crateP:1,crateD:1};
 const ELEC={fuse:1,terminal:1,generator:1};
 const SHOP={S:[1,1,23,11],K:[13,11,18,11],B:[1,13,23,23]};
@@ -2066,10 +2066,11 @@ const CAUSES=['Stared directly into the entity while holding a stack of floor wa
 const SPD={lurker:{p:3.4,h:6.3,sight:18,hear:1,f:1},mimic:{p:3.6,h:7.2,sight:20,hear:1,f:1.05},enforcer:{p:4.8,h:8.4,sight:24,hear:1.35,f:1.1}};
 const TINT={lurker:[0xc9ced6,0xbfe6ff,[.8,1,.8]],mimic:[0xb8c46a,0xfff06a,[1,1,1]],enforcer:[0x8a2a2a,0xff7a20,[1.1,1.1,1.1]]};
 const PLAN={
-  1:[['stock','S'],['broom','S'],['mop','S'],['fuse','B']],
-  2:[['stock','S'],['broom','S'],['mop','S'],['fuse','B'],['terminal','K'],['crateP','S',0],['crateD','K',0]],
-  3:[['stock','S'],['broom','S'],['mop','S'],['fuse','B'],['fuse','B'],['terminal','K'],['generator','B'],['crateP','S',0],['crateD','K',0],['crateP','S',1],['crateD','K',1]]
+  1:[['stock','S'],['broom','S'],['mop','S'],['tables','BR'],['fuse','B']],
+  2:[['stock','S'],['broom','S'],['mop','S'],['tables','BR'],['fuse','B'],['terminal','K'],['crateP','S',0],['crateD','K',0]],
+  3:[['stock','S'],['broom','S'],['mop','S'],['tables','BR'],['fuse','B'],['fuse','B'],['terminal','K'],['generator','B'],['crateP','S',0],['crateD','K',0],['crateP','S',1],['crateD','K',1]]
 };
+
 /* one department per night: where you spawn, where the elevator is, where the mannequins stand */
 const LAY={
   1:{spawn:[3,10],exit:[22,2],cloth:[13,1,23,2],nMq:3,tv:0,dept:'GROCERY & CHECKOUT'},
@@ -2130,7 +2131,7 @@ const fbBtn=document.createElement('div');fbBtn.className='hb';fbBtn.id='btnFlas
 fbBtn.style.cssText='display:none;right:calc(5vmin + 41vmin + env(safe-area-inset-right));bottom:calc(8vmin + env(safe-area-inset-bottom));width:15vmin;height:15vmin;max-width:80px;max-height:80px;font-size:10px;border-color:#fff;color:#fff';
 $('hud').appendChild(fbBtn);
 const toolBtn=document.createElement('div');toolBtn.className='hb';toolBtn.id='btnTool';
-toolBtn.style.cssText='display:none;right:calc(5vmin + env(safe-area-inset-right));bottom:calc(8vmin + 38vmin + env(safe-area-inset-bottom));width:15vmin;height:15vmin;max-width:82px;max-height:82px;font-size:10px;border-color:#ffb347;color:#ffb347';
+toolBtn.style.cssText='display:none;right:calc(5vmin + env(safe-area-inset-right));bottom:calc(8vmin + 22vmin + env(safe-area-inset-bottom));width:15vmin;height:15vmin;max-width:82px;max-height:82px;font-size:10px;border-color:#ffb347;color:#ffb347';
 
 $('hud').appendChild(toolBtn);
 const paEl=document.createElement('div');paEl.id='pa';$('hud').appendChild(paEl);
@@ -2223,7 +2224,13 @@ function carveStore(){
     for(const [bx,bz] of [[3,3],[8,3],[3,7],[8,7],[14,7],[19,7]])for(let dz=0;dz<2;dz++)for(let dx=0;dx<2;dx++)grid[bz+dz][bx+dx]=1;
     for(const [px,pz] of [[16,3],[20,3],[16,5],[20,5]])grid[pz][px]=1;   // clothing racks
   }
+  // employee break room (top-left store corner, doorway at x=4, z=2)
+  for(let z=1;z<=3;z++)for(let x=1;x<=4;x++)grid[z][x]=0;
+  for(let x=1;x<=4;x++)grid[4][x]=1;
+  for(let z=1;z<=4;z++)grid[z][5]=1;
+  grid[2][5]=0;
 }
+
 genMaze=function(seed){
   if(!SH.on)return _gm.apply(null,arguments);
   GW=25;N=12;NEED=0;N_BATT=5;N_LOCK=12;
@@ -2243,7 +2250,9 @@ function shiftLayout(){
   const dist=bfsDist(SP[0],SP[1]),dd=c=>dist[c[1]][c[0]]>=0?dist[c[1]][c[0]]:0;
   const wallsOf=c=>D4.filter(([a,b])=>grid[c[1]+b][c[0]+a]===1);
   const used=[SP.slice(),Y.exit.slice()];
+  for(let z=1;z<=4;z++)for(let x=1;x<=5;x++)used.push([x,z]);
   if(SH.night===3)BREAK_ROOMS.forEach(c=>used.push(c.slice()));
+
   const free=(c,sep)=>used.every(u=>Math.abs(u[0]-c[0])+Math.abs(u[1]-c[1])>=sep);
   const pick=(reg,wall,sep)=>{
     const R=SHOP[reg];
@@ -2254,6 +2263,8 @@ function shiftLayout(){
     const c=shuffle(cand.slice())[0]||open[0];used.push(c);return c;
   };
   const mk=(kind,reg,extra)=>{
+    if(reg==='BR')return Object.assign({kind,name:KINDS[kind][0],dur:KINDS[kind][1],tx:2,tz:1,x:tc(2),z:tc(1)+.4,fx:0,fz:1,progress:0,done:false,by:-1},extra||{});
+
     const fl=!!FLOOR_KINDS[kind],c=pick(reg,!fl,4);
     const w=wallsOf(c),d=fl?[0,0]:(w[(rng()*w.length)|0]||[0,-1]);
     return Object.assign({kind,name:KINDS[kind][0],dur:KINDS[kind][1],tx:c[0],tz:c[1],x:tc(c[0])+d[0]*(T/2-.7),z:tc(c[1])+d[1]*(T/2-.7),fx:-d[0],fz:-d[1],progress:0,done:false,by:-1},extra||{});
@@ -2324,11 +2335,18 @@ function mkStation(t){
     case 'terminal':box(1.1,.8,.7,lit(0x3a3f46),0,.4,0);box(.8,.55,.06,em(0x40e0ff),0,1.05,.1).rotation.x=-.25;break;
     case 'generator':box(1.2,1,1,lit(0x3b7f4a),0,.5,0);box(.6,.1,.05,em(0xffd24a),0,1.1,.52);break;
     case 'crateP':box(.85,.85,.85,lit(0x9b7a4a),0,.43,0);box(.9,.08,.9,em(0xffd24a),0,.88,0);break;
+    case 'tables':{   // messy trays and mugs sitting on top of the cafeteria table
+      box(.55,.04,.38,em(0xffd24a),-.45,.82,0);
+      box(.48,.04,.34,em(0xffd24a),.42,.82,.08);
+      box(.14,.18,.14,lit(0xd8d4c8),-.15,.89,-.12);
+      box(.16,.12,.16,em(0xffa030),.18,.86,-.15);
+      break}
     case 'crateD':{   // a checkout lane: delivery pad, conveyor + register behind it, and a sign
       box(1.6,.06,1.6,em(0x44ff88),0,.04,0);
       box(1.1,.8,.6,lit(0x4a5058),0,.4,1.45);box(.5,.4,.4,lit(0x2a2f35),.2,1.0,1.45);box(.34,.18,.04,em(0x40e0ff),.2,1.1,1.24);
       const s=new THREE.Sprite(new THREE.SpriteMaterial({map:labelTex('CHECKOUT','#ffd24a',256,64),fog:true}));s.scale.set(1.5,.38,1);s.position.set(0,2.3,1.45);g.add(s);break}
   }
+
   g.position.set(t.x,0,t.z);g.rotation.y=Math.atan2(t.fx,t.fz);t.glow=glow;return g;
 }
 const markDone=t=>{
@@ -2426,7 +2444,7 @@ function warmAt(x,z){
   for(const f of SH.flares)if(Math.hypot(f.x-x,f.z-z)<6)return true;
   return false;
 }
-const litAt=p=>(!inBase(p.x,p.z)&&!SH.late&&SH.lightsOut<=0)||poolLit(p.x,p.z)||!!p.flOn;
+const litAt=p=>(!inBase(p.x,p.z)&&!SH.late&&SH.lightsOut<=0)||poolLit(p.x,p.z);
 
 
 /* ---------- building the store ---------- */
@@ -2527,8 +2545,10 @@ function buildShift(){
     if(grid[z][x]!==1)continue;
     for(const [dx,dz] of D4){
       if(!grid[z+dz]||grid[z+dz][x+dx]!==0||z+dz>11)continue;
+      if(x+dx<=5&&z+dz<=4)continue;                         // keep store racks out of the break room
       if(SH.night===1&&dz!==0)continue;                      // grocery: racks only on the aisle sides, not the shelf ends
       if(x+dx<1||x+dx>23||z+dz<1)continue;
+
       put(rackFrames,x,z,dx,dz,T/2+.03,0,1.45,.04,2.9,T-.3);   // backing panel just outside the wall
       for(let p=0;p<4;p++){
         const py=.5+p*.6;
@@ -2603,7 +2623,7 @@ function buildShift(){
     const m=mkMannequin(i+SH.night*3);m.position.set(p.x,0,p.z);m.rotation.y=Math.random()*6.28;setPose(m,i);scene.add(m);
     return {x:p.x,z:p.z,hx:p.x,hz:p.z,yaw:m.rotation.y,tyaw:m.rotation.y,tx:p.x,tz:p.z,pose:i,mesh:m,u:0,thr:3+Math.random()*5};
   });
-  // heated break rooms (freezer night): a heater, a sign and a warm light
+// heated break rooms (freezer night): a heater, a sign and a warm light
   SH.heaters=(SH.lay.heaters||[]).map(p=>{
     const h=mkHeater();
     const wd=D4.find(([dx,dz])=>{const tx=Math.floor(p.x/T)+dx,tz=Math.floor(p.z/T)+dz;return grid[tz]&&grid[tz][tx]===1&&!(dx===0&&dz===-1&&false)});
@@ -2612,6 +2632,44 @@ function buildShift(){
     STATIC_L.push({x:p.x,y:groundAt(p.x,p.z)+1.5,z:p.z,i:1.35});
     return {x:p.x,z:p.z,mesh:h};
   });
+  buildBreakRoom();
+}
+function buildBreakRoom(){
+  const g=new THREE.Group();
+  const topM=mkMat({color:0xd8d4c8}),legM=mkMat({color:0x363a40}),seatM=mkMat({color:0xb85a3a}),cntM=mkMat({color:0x5a4636}),vendM=mkMat({color:0x2b4a6f});
+  const box=(w,h,d,m,x,y,z)=>{const o=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m);o.position.set(x,y,z);g.add(o);return o};
+  // warm break-room floor rug/linoleum accent
+  const rug=new THREE.Mesh(new THREE.PlaneGeometry(3.6*T,2.6*T),mkMat({color:0x524c44}));
+  rug.rotation.x=-Math.PI/2;rug.position.set(3*T,.015,2.5*T);g.add(rug);
+  // 2 long cafeteria tables with 4 chairs each
+  const mkTable=(cx,cz)=>{
+    box(2.2,.08,1.0,topM,cx,.76,cz);
+    for(const sx of [-.9,.9])for(const sz of [-.38,.38])box(.07,.74,.07,legM,cx+sx,.37,cz+sz);
+    solidRects.push({x:cx,z:cz,hx:1.12,hz:.52});
+    for(const sx of [-.55,.55])for(const sz of [-.78,.78]){
+      box(.42,.06,.42,seatM,cx+sx,.46,cz+sz);
+      box(.42,.44,.06,seatM,cx+sx,.68,cz+sz+(sz<0?-.18:.18));
+      for(const lx of [-.16,.16])for(const lz of [-.16,.16])box(.04,.44,.04,legM,cx+sx+lx,.22,cz+sz+lz);
+    }
+  };
+  mkTable(tc(2),tc(1)+.4);
+  mkTable(tc(2),tc(3)-.4);
+  // kitchen counter + coffee machine against the left wall
+  box(.75,.9,3.2,cntM,T+.4,.45,tc(2));
+  box(.45,.42,.4,mkMat({color:0x1b1d20}),T+.4,1.11,tc(2)-.8);
+  const pot=new THREE.Mesh(new THREE.CylinderGeometry(.11,.13,.22,10),new THREE.MeshBasicMaterial({color:0xff9a3a}));
+  pot.position.set(T+.45,1.04,tc(2)-.8);g.add(pot);
+  solidRects.push({x:T+.4,z:tc(2),hx:.4,hz:1.62});
+  // glowing soda vending machine in the corner
+  box(.9,2.0,.8,vendM,tc(4)+.3,1.0,T+.45);
+  const glass=new THREE.Mesh(new THREE.BoxGeometry(.62,1.15,.04),new THREE.MeshBasicMaterial({color:0x66ccff}));
+  glass.position.set(tc(4)+.3,1.2,T+.86);g.add(glass);
+  solidRects.push({x:tc(4)+.3,z:T+.45,hx:.48,hz:.42});
+  // overhead BREAK ROOM sign outside the doorway (at x=5, z=2)
+  const sign=new THREE.Sprite(new THREE.SpriteMaterial({map:labelTex('BREAK ROOM','#ffb347',256,64),fog:true}));
+  sign.scale.set(2.1,.52,1);sign.position.set(tc(5)+.6,2.85,tc(2));g.add(sign);
+  STATIC_L.push({x:tc(2),y:WALL_H-.3,z:tc(2),i:1.25});
+  scene.add(g);
 }
 /* ---------- the stairwell door ---------- */
 const DOOR={open:false,pivot:null,lockLamp:null};
@@ -2771,13 +2829,14 @@ function tvTick(){
 
 /* ---------- the monster brain ---------- */
 function shiftPlayers(){
-  const ps=[{id:me.id,x:me.x,z:me.z,fl:litAt({x:me.x,z:me.z,flOn}),noise:noiseFor(me.id,noiseR),hid:me.hid>=0,li:me.hid,ref:me,down:isDown(me.id),prot:(SH.prot[me.id]||0)>0,role:rk(me.id)}];
+  const ps=[{id:me.id,x:me.x,z:me.z,fl:litAt(me),noise:noiseFor(me.id,noiseR),hid:me.hid>=0,li:me.hid,ref:me,down:isDown(me.id),prot:(SH.prot[me.id]||0)>0,role:rk(me.id)}];
   peers.forEach(p=>{if(!p.active)return;
     const base=p.v>WALK0*1.5?HEAR_SPRINT:p.v>1?HEAR_WALK:0;
-    ps.push({id:p.id,x:p.x,z:p.z,fl:litAt({x:p.x,z:p.z,flOn:p.fl}),noise:noiseFor(p.id,base),hid:p.hid>0,li:p.hid-1,ref:p,down:isDown(p.id),prot:(SH.prot[p.id]||0)>0,role:rk(p.id)});
+    ps.push({id:p.id,x:p.x,z:p.z,fl:litAt(p),noise:noiseFor(p.id,base),hid:p.hid>0,li:p.hid-1,ref:p,down:isDown(p.id),prot:(SH.prot[p.id]||0)>0,role:rk(p.id)});
   });
   return ps;
 }
+
 
 const shiftDetect=occ=>{
   let b=occ.ref.saw?1:.42;
@@ -2958,6 +3017,7 @@ function choreRate(t,by){
   const r=rk(by),P=playerObj(by);let m=1;
   if(ELEC[t.kind]&&r==='tech')m*=1.5;
   if(t.kind==='mop'){if(r==='custodian')m*=2;m*=1+.25*upl(by,'broom')}
+  if(t.kind==='tables'&&r==='custodian')m*=1.5;
   if(r==='freezer'&&(t.kind==='stock'||t.kind==='crateP'||t.kind==='crateD'))m*=.75;
   if(r==='owl')m*=.8;
   if(P){
@@ -3518,7 +3578,8 @@ const _dm=drawMap,_db=drawBigMap;
 const hideMons=fn=>{const s=mons.slice();mons.length=0;try{fn()}finally{s.forEach(m=>mons.push(m))}};
 drawMap=function(){if(SH.on)hideMons(_dm);else _dm()};
 drawBigMap=function(){if(SH.on)hideMons(_db);else _db()};
-// flashlight enabled in Night Shift
+const _tl=toggleLight;
+toggleLight=function(){if(SH.on)return;_tl()};                  // no flashlight in this mode
 
 
 /* ---------- controls ---------- */
@@ -3693,12 +3754,11 @@ const BARS=document.querySelector('.bars');
 function shiftTick(dt){
   if(!SH.on)return;
   const dread=SH.dread>0,inB=inBase(me.x,me.z),k=myK();
-  if(state!=='dying'){                                           // flashlight + store lights
+  if(state!=='dying'){                                           // no flashlight: the store lights decide what you see
     if(dread!==SH.dreadOn){SH.dreadOn=dread;hum(dread);if(musicBus&&AC)musicBus.gain.setTargetAtTime(dread?0:(SET.music?.55:0),AC.currentTime,.3)}
-    let flI=flOn?1:0;
-    if(flOn&&(batt<18||(nearD<12&&closeness>.4)||SH.dread>0)&&Math.random()<.18)flI*=.15;
-    FLU.uFlI.value=flI*FL_POWER;
+    FLU.uFlI.value=0;
     let target=inB?.025:SH.lightsOut>0?.035:SH.late?.3:1;
+
 
     if(k==='freezer')target=Math.max(target,.13);                // sees faint outlines in the dark
     FLU.uAmb.value=fadeAmb(target);
@@ -3809,10 +3869,12 @@ update=function(dt){
   if(!SH.on){if(BARS.style.top)BARS.style.top='';return}
   guard(()=>shiftTick(dt),'shift');
 guard(()=>{                                                    // follow the floor, then feed the lights
+    batt=100;
     mons.forEach(mo=>{if(mo.mesh)mo.mesh.position.y=groundAt(mo.mesh.position.x,mo.mesh.position.z)});
     peers.forEach(p=>{if(p.mesh&&!isDown(p.id))p.mesh.position.y=groundAt(p.x,p.z)});
     camera.position.y+=groundAt(me.x,me.z)+(isDown(me.id)?-.95:0);
     updateLights();
+    if(!window.__bbHid){window.__bbHid=true;const bb=$('bBatt').parentNode;bb.style.display='none';bb.previousElementSibling.style.display='none'}
     const ob=$('obj'),tick=Math.floor(performance.now()/500);if(tick!==window.__barTick){window.__barTick=tick;BARS.style.top=(ob.offsetTop+ob.offsetHeight+10)+'px'}
   },'visuals');
 };
@@ -3828,7 +3890,7 @@ beginRound=function(seed,r,id,n){
   document.body.classList.toggle('sh',SH.on);
   fbBtn.style.display=SH.on?'flex':'none';
   toolBtn.style.display='none';
-  $('btnLight').style.display='';
+  $('btnLight').style.display=SH.on?'none':'';
   coldLbl.style.display=coldBar.style.display='none';
   if(!SH.on){window.__bbHid=false;FLU.uAmb.value=AMBIENT;hum(false);const bb=$('bBatt').parentNode;bb.style.display='';bb.previousElementSibling.style.display='';panicMul=1;return}
   const k=myK();
