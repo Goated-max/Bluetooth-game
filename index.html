@@ -545,7 +545,7 @@ function animPeer(p,dt,carrying){
 function ensureRenderer(){
   if(renderer)return;
   renderer=new THREE.WebGLRenderer({canvas:$('view'),antialias:false,powerPreference:'high-performance'});
-  renderer.setPixelRatio(Math.min(devicePixelRatio||1,1));renderer.setSize(innerWidth,innerHeight);
+  renderer.setPixelRatio(Math.min(devicePixelRatio||1,SET.res||1));renderer.setSize(innerWidth,innerHeight);
 }
 function disposeScene(){
   if(!scene)return;
@@ -1729,6 +1729,19 @@ function toggleSfx(){SET.sfx=!SET.sfx;saveSet();if(sfxBus)sfxBus.gain.setTargetA
 $('bMusic').onclick=toggleMusic;$('pMusic').onclick=toggleMusic;press('btnMute',toggleMusic);
 $('bSfx').onclick=toggleSfx;$('pSfx').onclick=toggleSfx;
 syncMenuBtns();
+/* resolution slider on the title screen */
+SET.res=SET.res||1;
+const resWrap=document.createElement('div');
+resWrap.style.cssText='margin:8px 0;font-size:12px;opacity:.85';
+resWrap.innerHTML='<div id="resLbl"></div><input id="resSlider" type="range" min="0.5" max="1.75" step="0.05" style="width:70%">';
+$('menuIn').appendChild(resWrap);
+const resSl=$('resSlider');
+resSl.value=SET.res;$('resLbl').textContent='RESOLUTION: '+Math.round(SET.res*100)+'%';
+resSl.oninput=()=>{
+  SET.res=+resSl.value;saveSet();
+  $('resLbl').textContent='RESOLUTION: '+Math.round(SET.res*100)+'%';
+  renderer.setPixelRatio(Math.min(devicePixelRatio||1,SET.res));renderer.setSize(innerWidth,innerHeight);
+};
 $('pResume').onclick=()=>setPause(false);
 $('pLeave').onclick=leaveGame;
 
