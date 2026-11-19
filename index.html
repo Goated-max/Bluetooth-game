@@ -2273,7 +2273,7 @@ function shiftLayout(){
   SH.tasks=PLAN[SH.night].map(p=>mk(p[0],p[1],p.length>2?{crate:p[2]}:null));
   for(let i=1;i<np;i++){SH.tasks.push(mk('stock','S'));SH.tasks.push(mk('broom','S'));SH.tasks.push(mk('mop','S'))}
   SH.types={1:['lurker'],2:['mimic','lurker'],3:['enforcer','lurker','mimic']}[SH.night].slice();
-  if(np>=3)SH.types.push('lurker');
+  if(np>=3&&SH.night>1)SH.types.push('lurker');
   // mannequins: they stand in the clothing & seasonal aisles. On the later nights one of them is really a Mimic.
   const hasMimic=SH.types.includes('mimic');
   const mqc=pickCells(open.filter(c=>inRect(c,Y.cloth)&&dd(c)>=8&&free(c,2)),Y.nMq,3);
