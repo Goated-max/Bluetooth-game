@@ -1615,11 +1615,18 @@ function renderLobby(){
 }
 function btStartGame(){
   if(!btLobby.length)return;
-  try{BT().stopHost()}catch(e){}
-  net.n2l={};net.l2n={};btLobby.forEach((nid,i)=>{net.n2l[nid]=i+1;net.l2n[i+1]=nid});
-  const n=btLobby.length+1,seed=(Math.random()*1e9)|0;
-  btLobby.forEach((nid,i)=>send({t:'start',seed,id:i+1,n},i+1));
-  beginRound(seed,'host',0,n);
+  const step=m=>{try{setStat('Start step: '+m)}catch(e){}};
+  try{
+    step('stopping host');
+    try{BT().stopHost()}catch(e){step('stopHost error: '+(e.message||e))}
+    net.n2l={};net.l2n={};btLobby.forEach((nid,i)=>{net.n2l[nid]=i+1;net.l2n[i+1]=nid});
+    const n=btLobby.length+1,seed=(Math.random()*1e9)|0;
+    step('sending start');
+    btLobby.forEach((nid,i)=>send({t:'start',seed,id:i+1,n},i+1));
+    step('building world');
+    beginRound(seed,'host',0,n);
+    step('round started');
+  }catch(e){step('ERROR: '+(e.message||e))}
 }
 function btHook(){
   if(btHooked)return;btHooked=true;const p=BT();
@@ -3907,6 +3914,8 @@ document.head.appendChild(_bm);
 
 /* ===== END NIGHT SHIFT ===== */
 })();
+window.addEventListener('error',e=>{try{setStat('JS error: '+e.message)}catch(_){}});
+window.addEventListener('unhandledrejection',e=>{try{setStat('JS error: '+((e.reason&&e.reason.message)||e.reason))}catch(_){}});
 </script>
 </body>
       </html>
